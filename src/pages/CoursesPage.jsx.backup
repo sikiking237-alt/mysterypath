@@ -1,0 +1,215 @@
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import Courses from "../components/Courses";
+import { useEnrollInCourseMutation, useGetAllCoursesQuery } from "../features/courses/coursesApi";
+import { apiEndpoints } from "../config/apiConfig";
+
+const CoursesPage = ({ darkMode, setDarkMode, user }) => {
+  const navigate = useNavigate();
+  const { data: allCoursesData, isLoading: loading } = useGetAllCoursesQuery();
+  const allCourses = allCoursesData || [];
+  const [enrolledCourses, setEnrolledCourses] = useState([]);
+  const [completedCourses, setCompletedCourses] = useState([]);
+  const [wishlist, setWishlist] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterLevel, setFilterLevel] = useState("all");
+  const [notification, setNotification] = useState(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [enrollingCourseId, setEnrollingCourseId] = useState(null);
+  const [enrollInCourse, { isLoading: isEnrolling }] = useEnrollInCourseMutation();
+
+  const token = localStorage.getItem("token");
+  const showNotification = (message, type = "success") => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  useEffect(() => {
+    loadWishlist();
+    fetchEnrolledCourses();
+  }, []);
+
+  const fetchEnrolledCourses = async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(apiEndpoints.enrollments.myLearning, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        setSessionExpired(true);
+        setEnrolledCourses([]);
+        setCompletedCourses([]);
+        return;
+      }
+      if (response.ok) {
+        const data = await response.json();
+        setEnrolledCourses(data);
+        setCompletedCourses(data.filter((c) => c.progress === 100));
+      }
+    } catch (error) {}
+  };
+
+  const loadWishlist = () => {
+    const saved = localStorage.getItem("course_wishlist");
+    if (saved) setWishlist(JSON.parse(saved));
+  };
+
+  useEffect(() => {
+    localStorage.setItem("course_wishlist", JSON.stringify(wishlist));
+  }, [wishlist]);
+
+  const handleEnroll = async (course) => {
+    if (!token) {
+      showNotification("Please login to enroll", "error");
+      navigate("/login");
+      return;
+    }
+
+    setEnrollingCourseId(course.id);
+
+    // Use the RTK Query mutation for enrollment
+    try {
+      const result = await enrollInCourse(course.id).unwrap();
+      const xpEarned = result.xp_earned ?? course.xp_reward ?? 0;
+      showNotification(
+        result.message || `✨ Enrolled in ${course.title}! +${xpEarned} XP`,
+        "success"
+      );
+      await fetchEnrolledCourses(); // Refresh enrolled courses list
+      navigate(`/course-player/${course.id}`);
+    } catch (err) {
+      const errorMessage = err.data?.message || err.data?.error || 'Failed to enroll. Please try again.';
+
+      // Handle specific error for existing enrollment
+      if (err.status === 409 || (err.status === 400 && String(errorMessage).toLowerCase().includes('already enrolled'))) {
+        showNotification('Already enrolled! Taking you to the course...', 'info');
+        navigate(`/course-player/${course.id}`);
+      } else if (err.status === 401) {
+        showNotification("Your session expired. Please login again.", "error");
+        navigate("/login");
+      } else if (err.status === 403) {
+        showNotification(errorMessage, "error");
+      }
+      else {
+        showNotification(errorMessage, "error");
+      }
+    } finally {
+      setEnrollingCourseId(null);
+    }
+  };
+
+  const handleCompleteCourse = (courseId, xpReward) => {
+    showNotification(`🎉 Course completed! +${xpReward} XP`, "success");
+  };
+
+  const updateProgress = (courseId, newProgress) => {
+    showNotification(`Progress updated to ${newProgress}%!`, "success");
+  };
+
+  const addToWishlist = (course) => {
+    if (wishlist.some((c) => c.id === course.id)) {
+      setWishlist(wishlist.filter((c) => c.id !== course.id));
+      showNotification(`Removed from wishlist`, "info");
+    } else {
+      setWishlist([...wishlist, course]);
+      showNotification(`Added to wishlist!`, "success");
+    }
+  };
+
+  if (sessionExpired) {
+    return (
+      <div
+        className={`min-h-screen flex items-center justify-center ${darkMode ? "bg-gray-900" : "bg-gray-50"}`}
+      >
+        <div
+          className={`max-w-md w-full mx-4 rounded-2xl p-8 text-center shadow-lg ${darkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"}`}
+        >
+          <div className="text-4xl mb-4">🔐</div>
+          <h2 className="text-2xl font-bold mb-3">Session expired</h2>
+          <p className={`${darkMode ? "text-gray-300" : "text-gray-600"} mb-6`}>
+            Please log in again to load your enrolled courses and continue
+            enrolling.
+          </p>
+          <button
+            onClick={() => navigate("/login")}
+            className="px-6 py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div
+        className={`min-h-screen flex items-center justify-center ${darkMode ? "bg-gray-900" : "bg-gray-50"}`}
+      >
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className={darkMode ? "text-gray-400" : "text-gray-600"}>
+            Loading courses...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen ${darkMode ? "bg-gray-900" : "bg-gray-50"}`}>
+      {notification && (
+        <div
+          className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-full shadow-xl font-semibold text-sm ${
+            notification.type === "error"
+              ? "bg-red-500"
+              : notification.type === "info"
+                ? "bg-blue-500"
+                : "bg-emerald-500"
+          } text-white`}
+        >
+          {notification.message}
+        </div>
+      )}
+
+      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold">
+                📚 Course Catalog
+              </h1>
+              <p className="text-purple-100 mt-2">
+                Browse and enroll in available courses
+              </p>
+            </div>
+            {/* ❌ REMOVED: Dark mode button - Now only in navbar */}
+            {/* <button onClick={() => setDarkMode(!darkMode)} className="px-4 py-2 bg-white/20 rounded-lg hover:bg-white/30 transition">
+              {darkMode ? "☀️" : "🌙"}
+            </button> */}
+          </div>
+        </div>
+      </div>
+
+      <Courses
+        allCourses={allCourses}
+        enrolledCourses={enrolledCourses}
+        completedCourses={completedCourses}
+        wishlist={wishlist}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        filterLevel={filterLevel}
+        setFilterLevel={setFilterLevel}
+        onEnroll={handleEnroll}
+        onCompleteCourse={handleCompleteCourse}
+        onUpdateProgress={updateProgress}
+        addToWishlist={addToWishlist}
+        darkMode={darkMode}
+        isEnrolling={isEnrolling}
+        enrollingCourseId={enrollingCourseId}
+      />
+    </div>
+  );
+};
+
+export default CoursesPage;

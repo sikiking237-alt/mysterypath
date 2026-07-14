@@ -1,0 +1,20 @@
+You're Invited to Join MysteryPath!
+
+Hello{% if name %} {{ name }}{% endif %},
+
+You have been invited to join MysteryPath as a {{ role_display }}.
+
+What you'll get:
+- Access to premium learning content
+- Personalized learning paths
+- Progress tracking and certificates
+{% if role == 'instructor' %}- Instructor dashboard and course creation tools{% elif role == 'moderator' %}- Content moderation and community management tools{% else %}- Interactive quizzes and exercises{% endif %}
+
+Accept your invitation here:
+{{ invite_link }}
+
+This link will expire in 7 days.
+
+If you did not expect this invitation, please ignore this email.
+
+© 2024 MysteryPath. All rights reserved.

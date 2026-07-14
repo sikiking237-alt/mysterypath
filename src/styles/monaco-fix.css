@@ -1,0 +1,3 @@
+﻿/* src/styles/monaco-fix.css */
+/* This file handles monaco-editor CSS imports */
+@import "monaco-editor/min/vs/editor/editor.main.css";

@@ -1,0 +1,1158 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Plus, X, Edit2, Trash2, Save, Upload, File,
+  BookOpen, Clock, Layers, Check, 
+  Brain, Code, FileText, Link2,
+  Lock, Unlock, ArrowUpCircle, ArrowDownCircle,
+  ChevronRight, ChevronLeft, Loader2,
+  PenTool, Sparkles, PlayCircle, Video,
+  Headphones, Award, Send, Download, FileUp,
+  AlertCircle, CheckCircle
+} from 'lucide-react';
+
+const BlockBasedCourseCreator = ({ darkMode, onSave, initialContent = [], courseId }) => {
+  const [blocks, setBlocks] = useState(initialContent.length > 0 ? initialContent : []);
+  
+  // Add default block when creating a new course
+  useEffect(() => {
+    if (initialContent?.length === 0 && blocks?.length === 0) {
+      const defaultBlock = {
+        id: Date.now(),
+        title: 'Welcome to Your Course',
+        description: 'Start building your course content by adding blocks and subtopics',
+        isLocked: false,
+        passingScore: 70,
+        subTopics: [
+          {
+            id: Date.now() + 1,
+            title: 'Getting Started',
+            content: 'This is your first subtopic. Add your course content here.',
+            type: 'text',
+            duration: '5 min',
+            isCompleted: false,
+            createdAt: new Date().toISOString()
+          }
+        ],
+        progress: 0,
+        createdAt: new Date().toISOString()
+      };
+      
+      setBlocks([defaultBlock]);
+      if (onSave) onSave([defaultBlock]);
+    }
+  }, []);
+
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [showSubTopicModal, setShowSubTopicModal] = useState(false);
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [editingBlockIndex, setEditingBlockIndex] = useState(null);
+  const [editingSubTopicIndex, setEditingSubTopicIndex] = useState(null);
+  const [editingQuizIndex, setEditingQuizIndex] = useState(null);
+  const [currentBlockIndex, setCurrentBlockIndex] = useState(null);
+  const [notification, setNotification] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // Block form
+  const [blockForm, setBlockForm] = useState({
+    title: '',
+    description: '',
+    isLocked: false,
+    passingScore: 70
+  });
+
+  // Sub-topic form
+  const [subTopicForm, setSubTopicForm] = useState({
+    title: '',
+    content: '',
+    type: 'text',
+    duration: '',
+    hasQuiz: false,
+    quizId: null,
+    resources: [],
+    files: []
+  });
+
+  // Quiz form
+  const [quizForm, setQuizForm] = useState({
+    title: '',
+    description: '',
+    questions: [],
+    passingScore: 70,
+    timeLimit: 0
+  });
+
+  const [questionForm, setQuestionForm] = useState({
+    question: '',
+    options: ['', '', '', ''],
+    correctAnswer: 0,
+    explanation: ''
+  });
+  const [showQuestionForm, setShowQuestionForm] = useState(false);
+
+  const lessonTypes = [
+    { value: 'text', label: 'Text Notes', icon: FileText, color: 'blue', desc: 'Write lesson notes' },
+    { value: 'video', label: 'Video', icon: PlayCircle, color: 'red', desc: 'Embed video' },
+    { value: 'quiz', label: 'Quiz', icon: Brain, color: 'green', desc: 'Add inline quiz' },
+    { value: 'code', label: 'Code Lab', icon: Code, color: 'purple', desc: 'Interactive coding' },
+    { value: 'file', label: 'File Upload', icon: FileUp, color: 'orange', desc: 'Upload PDF, DOC, etc.' }
+  ];
+
+  const showNotification = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  // SAVE ALL CONTENT
+  const handleSaveContent = async () => {
+    console.log("🔵 Save button clicked");
+    setIsSaving(true);
+    setSaveSuccess(false);
+    
+    try {
+      const contentData = {
+        courseId: courseId || 'temp',
+        blocks: blocks,
+        totalBlocks: blocks.length,
+        totalSubtopics: blocks.reduce((acc, block) => acc + (block.subTopics?.length || 0), 0),
+        lastSaved: new Date().toISOString(),
+        timestamp: Date.now()
+      };
+      
+      console.log("📦 Content to save:", contentData);
+      
+      if (onSave) {
+        await onSave(blocks);
+        console.log("✅ onSave completed");
+      } else {
+        console.log("💾 Saving to localStorage");
+        try {
+          localStorage.setItem('course_blocks_draft', JSON.stringify(contentData));
+        } catch (e) {
+          console.warn('Could not save to localStorage:', e);
+        }
+      }
+      
+      setSaveSuccess(true);
+      showNotification('✅ All content saved successfully!', 'success');
+      setTimeout(() => setSaveSuccess(false), 3000);
+      
+    } catch (error) {
+      console.error("❌ Save error:", error);
+      showNotification('❌ Error saving content: ' + (error.message || 'Unknown error'), 'error');
+    } finally {
+      setIsSaving(false);
+      console.log("🏁 Save operation completed");
+    }
+  };
+
+  // File upload handler
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      showNotification('File size must be less than 10MB', 'error');
+      return;
+    }
+
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    ];
+    if (!allowedTypes.includes(file.type)) {
+      showNotification('Please upload PDF, DOC, DOCX, PPT, PPTX, or TXT files', 'error');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      showNotification('You must be logged in to upload files', 'error');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('/api/instructor/upload/file', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'File upload failed');
+      }
+
+      const fileData = {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        url: data.file_url,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      setSubTopicForm({
+        ...subTopicForm,
+        files: [...subTopicForm.files, fileData],
+      });
+      showNotification('File uploaded: ' + file.name);
+    } catch (error) {
+      showNotification('Upload failed: ' + error.message, 'error');
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeFile = (index) => {
+    const updatedFiles = subTopicForm.files.filter((_, i) => i !== index);
+    setSubTopicForm({ ...subTopicForm, files: updatedFiles });
+    showNotification('File removed');
+  };
+
+  // Block functions
+  const addBlock = () => {
+    if (!blockForm.title.trim()) {
+      showNotification('Please enter a block title', 'error');
+      return;
+    }
+
+    const newBlock = {
+      id: Date.now(),
+      ...blockForm,
+      subTopics: [],
+      progress: 0,
+      createdAt: new Date().toISOString()
+    };
+
+    const updatedBlocks = [...blocks, newBlock];
+    setBlocks(updatedBlocks);
+    if (onSave) onSave(updatedBlocks);
+    setShowBlockModal(false);
+    setBlockForm({ title: '', description: '', isLocked: false, passingScore: 70 });
+    setEditingBlockIndex(null);
+    showNotification('Block added successfully!');
+  };
+
+  const updateBlock = () => {
+    if (editingBlockIndex === null) return;
+    const updatedBlocks = [...blocks];
+    updatedBlocks[editingBlockIndex] = { ...updatedBlocks[editingBlockIndex], ...blockForm };
+    setBlocks(updatedBlocks);
+    if (onSave) onSave(updatedBlocks);
+    setShowBlockModal(false);
+    setBlockForm({ title: '', description: '', isLocked: false, passingScore: 70 });
+    setEditingBlockIndex(null);
+    showNotification('Block updated!');
+  };
+
+  const deleteBlock = (index) => {
+    if (window.confirm('Delete this block and all its subtopics?')) {
+      const updated = blocks.filter((_, i) => i !== index);
+      setBlocks(updated);
+      if (onSave) onSave(updated);
+      showNotification('Block deleted', 'info');
+    }
+  };
+
+  // Sub-topic functions
+  const addSubTopic = () => {
+    if (!subTopicForm.title.trim()) {
+      showNotification('Please enter a subtopic title', 'error');
+      return;
+    }
+    if (!subTopicForm.content.trim() && subTopicForm.type !== 'file') {
+      showNotification('Please write the notes/content', 'error');
+      return;
+    }
+    if (subTopicForm.type === 'file' && subTopicForm.files.length === 0) {
+      showNotification('Please upload at least one file', 'error');
+      return;
+    }
+
+    const updatedBlocks = [...blocks];
+    const newSubTopic = {
+      id: Date.now(),
+      ...subTopicForm,
+      order: updatedBlocks[currentBlockIndex].subTopics.length,
+      isCompleted: false,
+      createdAt: new Date().toISOString()
+    };
+
+    updatedBlocks[currentBlockIndex].subTopics.push(newSubTopic);
+    
+    if (subTopicForm.hasQuiz && quizForm.questions.length > 0) {
+      const durationText = quizForm.timeLimit > 0 ? quizForm.timeLimit + ' min' : '';
+      const quizSubTopic = {
+        id: Date.now() + 1,
+        title: 'Quiz: ' + (quizForm.title || subTopicForm.title),
+        content: quizForm.description || '',
+        type: 'quiz',
+        duration: durationText,
+        hasQuiz: true,
+        quizData: {
+          ...quizForm,
+          id: Date.now()
+        },
+        isCompleted: false,
+        createdAt: new Date().toISOString()
+      };
+      updatedBlocks[currentBlockIndex].subTopics.push(quizSubTopic);
+      resetQuizForm();
+    }
+
+    setBlocks(updatedBlocks);
+    if (onSave) onSave(updatedBlocks);
+    setShowSubTopicModal(false);
+    resetSubTopicForm();
+    showNotification('Sub-topic added successfully!');
+  };
+
+  const updateSubTopic = () => {
+    if (currentBlockIndex === null || editingSubTopicIndex === null) return;
+    const updatedBlocks = [...blocks];
+    
+    updatedBlocks[currentBlockIndex].subTopics[editingSubTopicIndex] = {
+      ...updatedBlocks[currentBlockIndex].subTopics[editingSubTopicIndex],
+      ...subTopicForm
+    };
+    
+    if (subTopicForm.hasQuiz && quizForm.questions.length > 0) {
+      const nextIndex = editingSubTopicIndex + 1;
+      const nextSubTopic = updatedBlocks[currentBlockIndex].subTopics[nextIndex];
+      
+      const durationText = quizForm.timeLimit > 0 ? quizForm.timeLimit + ' min' : '';
+      const quizData = {
+        ...quizForm,
+        id: Date.now()
+      };
+      
+      if (nextSubTopic && nextSubTopic.type === 'quiz') {
+        updatedBlocks[currentBlockIndex].subTopics[nextIndex] = {
+          ...nextSubTopic,
+          title: 'Quiz: ' + (quizForm.title || subTopicForm.title),
+          content: quizForm.description || '',
+          duration: durationText,
+          quizData: quizData
+        };
+      } else {
+        const quizSubTopic = {
+          id: Date.now() + 1,
+          title: 'Quiz: ' + (quizForm.title || subTopicForm.title),
+          content: quizForm.description || '',
+          type: 'quiz',
+          duration: durationText,
+          hasQuiz: true,
+          quizData: quizData,
+          isCompleted: false,
+          createdAt: new Date().toISOString()
+        };
+        updatedBlocks[currentBlockIndex].subTopics.splice(editingSubTopicIndex + 1, 0, quizSubTopic);
+      }
+      resetQuizForm();
+    }
+
+    setBlocks(updatedBlocks);
+    if (onSave) onSave(updatedBlocks);
+    setShowSubTopicModal(false);
+    resetSubTopicForm();
+    showNotification('Sub-topic updated!');
+  };
+
+  const deleteSubTopic = (blockIndex, subTopicIndex) => {
+    if (window.confirm('Delete this sub-topic?')) {
+      const updatedBlocks = [...blocks];
+      const nextIndex = subTopicIndex + 1;
+      if (nextIndex < updatedBlocks[blockIndex].subTopics.length && 
+          updatedBlocks[blockIndex].subTopics[nextIndex].type === 'quiz') {
+        updatedBlocks[blockIndex].subTopics.splice(nextIndex, 1);
+      }
+      updatedBlocks[blockIndex].subTopics.splice(subTopicIndex, 1);
+      setBlocks(updatedBlocks);
+      if (onSave) onSave(updatedBlocks);
+      showNotification('Sub-topic deleted', 'info');
+    }
+  };
+
+  const resetSubTopicForm = () => {
+    setSubTopicForm({
+      title: '',
+      content: '',
+      type: 'text',
+      duration: '',
+      hasQuiz: false,
+      quizId: null,
+      resources: [],
+      files: []
+    });
+    setEditingSubTopicIndex(null);
+    setCurrentBlockIndex(null);
+  };
+
+  // Quiz functions
+  const addQuiz = () => {
+    if (!quizForm.title.trim()) {
+      showNotification('Please enter a quiz title', 'error');
+      return;
+    }
+    if (quizForm.questions.length === 0) {
+      showNotification('Please add at least one question', 'error');
+      return;
+    }
+    showNotification('Quiz ready! Please save the subtopic to include it.', 'success');
+    setShowQuizModal(false);
+  };
+
+  const addQuizQuestion = () => {
+    if (!questionForm.question.trim()) {
+      showNotification('Please enter a question', 'error');
+      return;
+    }
+    if (questionForm.options.some(opt => !opt.trim())) {
+      showNotification('Please fill in all options', 'error');
+      return;
+    }
+
+    setQuizForm({
+      ...quizForm,
+      questions: [...quizForm.questions, { 
+        ...questionForm, 
+        id: Date.now() 
+      }]
+    });
+
+    setQuestionForm({ 
+      question: '', 
+      options: ['', '', '', ''], 
+      correctAnswer: 0, 
+      explanation: '' 
+    });
+    setShowQuestionForm(false);
+    showNotification('Question added!');
+  };
+
+  const removeQuizQuestion = (index) => {
+    const updated = quizForm.questions.filter((_, i) => i !== index);
+    setQuizForm({ ...quizForm, questions: updated });
+  };
+
+  const resetQuizForm = () => {
+    setQuizForm({ 
+      title: '', 
+      description: '', 
+      questions: [], 
+      passingScore: 70, 
+      timeLimit: 0 
+    });
+    setQuestionForm({ 
+      question: '', 
+      options: ['', '', '', ''], 
+      correctAnswer: 0, 
+      explanation: '' 
+    });
+    setShowQuestionForm(false);
+  };
+
+  // Render Block Modal
+  const renderBlockModal = () => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className={'max-w-md w-full p-6 rounded-xl shadow-2xl ' + (darkMode ? 'bg-gray-800' : 'bg-white')}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className={'text-lg font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>
+            {editingBlockIndex !== null ? 'Edit Block' : 'Add New Block'}
+          </h3>
+          <button onClick={() => setShowBlockModal(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className={'block text-sm font-medium mb-1 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+              Block Title *
+            </label>
+            <input
+              type="text"
+              value={blockForm.title}
+              onChange={(e) => setBlockForm({ ...blockForm, title: e.target.value })}
+              className={'w-full px-4 py-2 rounded-lg border-2 focus:outline-none transition ' + (
+                darkMode ? 'bg-gray-700 border-gray-600 text-white focus:border-indigo-500' : 'bg-white border-gray-200 text-gray-900 focus:border-indigo-500'
+              )}
+              placeholder="e.g., Python Basics"
+            />
+          </div>
+          <div>
+            <label className={'block text-sm font-medium mb-1 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+              Block Description
+            </label>
+            <textarea
+              value={blockForm.description}
+              onChange={(e) => setBlockForm({ ...blockForm, description: e.target.value })}
+              rows="2"
+              className={'w-full px-4 py-2 rounded-lg border-2 focus:outline-none transition ' + (
+                darkMode ? 'bg-gray-700 border-gray-600 text-white focus:border-indigo-500' : 'bg-white border-gray-200 text-gray-900 focus:border-indigo-500'
+              )}
+              placeholder="Brief description of this block"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={blockForm.isLocked}
+              onChange={(e) => setBlockForm({ ...blockForm, isLocked: e.target.checked })}
+              className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <label className={'text-sm ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+              Lock this block (students must complete all subtopics)
+            </label>
+          </div>
+          <div>
+            <label className={'block text-sm font-medium mb-1 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+              Passing Score for Quizzes in Block (%)
+            </label>
+            <input
+              type="number"
+              value={blockForm.passingScore}
+              onChange={(e) => setBlockForm({ ...blockForm, passingScore: parseInt(e.target.value) })}
+              className={'w-full px-4 py-2 rounded-lg border-2 focus:outline-none transition ' + (
+                darkMode ? 'bg-gray-700 border-gray-600 text-white focus:border-indigo-500' : 'bg-white border-gray-200 text-gray-900 focus:border-indigo-500'
+              )}
+              min="0"
+              max="100"
+            />
+          </div>
+          <button
+            onClick={editingBlockIndex !== null ? updateBlock : addBlock}
+            className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+          >
+            {editingBlockIndex !== null ? 'Update Block' : 'Add Block'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render SubTopic Modal
+  const renderSubTopicModal = () => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className={'max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 rounded-xl shadow-2xl ' + (darkMode ? 'bg-gray-800' : 'bg-white')}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className={'text-lg font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>
+            {editingSubTopicIndex !== null ? 'Edit Sub-topic' : 'Add Sub-topic'}
+          </h3>
+          <button onClick={() => setShowSubTopicModal(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className={'block text-sm font-medium mb-1 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+              Sub-topic Title *
+            </label>
+            <input
+              type="text"
+              value={subTopicForm.title}
+              onChange={(e) => setSubTopicForm({ ...subTopicForm, title: e.target.value })}
+              className={'w-full px-4 py-2 rounded-lg border-2 focus:outline-none transition ' + (
+                darkMode ? 'bg-gray-700 border-gray-600 text-white focus:border-indigo-500' : 'bg-white border-gray-200 text-gray-900 focus:border-indigo-500'
+              )}
+              placeholder="e.g., Understanding Variables"
+            />
+          </div>
+
+          <div>
+            <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+              Content Type
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {lessonTypes.map((lt) => (
+                <button
+                  key={lt.value}
+                  type="button"
+                  onClick={() => setSubTopicForm({ ...subTopicForm, type: lt.value })}
+                  className={'flex items-center gap-2 p-3 rounded-lg border-2 transition ' + (
+                    subTopicForm.type === lt.value
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                      : darkMode ? 'border-gray-600 hover:border-gray-500' : 'border-gray-200 hover:border-gray-300'
+                  )}
+                >
+                  <lt.icon className={'w-4 h-4 ' + (subTopicForm.type === lt.value ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500')} />
+                  <span className={'text-sm font-medium ' + (subTopicForm.type === lt.value ? 'text-indigo-700 dark:text-indigo-300' : '')}>
+                    {lt.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {subTopicForm.type !== 'file' && (
+            <div>
+              <label className={'block text-sm font-medium mb-1 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+                Content
+              </label>
+              <textarea
+                value={subTopicForm.content}
+                onChange={(e) => setSubTopicForm({ ...subTopicForm, content: e.target.value })}
+                rows="4"
+                className={'w-full px-4 py-2 rounded-lg border-2 focus:outline-none transition ' + (
+                  darkMode ? 'bg-gray-700 border-gray-600 text-white focus:border-indigo-500' : 'bg-white border-gray-200 text-gray-900 focus:border-indigo-500'
+                )}
+                placeholder="Write your content here..."
+              />
+            </div>
+          )}
+
+          {subTopicForm.type === 'file' && (
+            <div>
+              <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+                Upload File (PDF, DOC, DOCX, PPT, PPTX, TXT)
+              </label>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className={'w-full p-4 rounded-lg border-2 border-dashed transition flex items-center justify-center gap-2 ' + (
+                  darkMode ? 'border-gray-600 text-gray-300 hover:border-indigo-500' : 'border-gray-300 text-gray-600 hover:border-indigo-500'
+                )}
+              >
+                <Upload className="w-5 h-5" />
+                <span className="text-sm font-medium">
+                  {subTopicForm.files.length > 0 ? 'Replace File' : 'Click to Upload File'}
+                </span>
+              </button>
+              {subTopicForm.files.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {subTopicForm.files.map((file, idx) => (
+                    <div key={idx} className={'flex items-center justify-between p-3 rounded-lg ' + (darkMode ? 'bg-gray-700' : 'bg-gray-50')}>
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-indigo-500" />
+                        <span className="text-sm truncate max-w-xs">{file.name}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = subTopicForm.files.filter((_, i) => i !== idx);
+                          setSubTopicForm({ ...subTopicForm, files: updated });
+                        }}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div>
+            <label className={'block text-sm font-medium mb-1 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+              Duration
+            </label>
+            <input
+              type="text"
+              value={subTopicForm.duration}
+              onChange={(e) => setSubTopicForm({ ...subTopicForm, duration: e.target.value })}
+              className={'w-full px-4 py-2 rounded-lg border-2 focus:outline-none transition ' + (
+                darkMode ? 'bg-gray-700 border-gray-600 text-white focus:border-indigo-500' : 'bg-white border-gray-200 text-gray-900 focus:border-indigo-500'
+              )}
+              placeholder="e.g., 10 min"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="hasQuiz"
+              checked={subTopicForm.hasQuiz}
+              onChange={(e) => setSubTopicForm({ ...subTopicForm, hasQuiz: e.target.checked })}
+              className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <label htmlFor="hasQuiz" className={'text-sm font-medium ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+              Add quiz to this sub-topic
+            </label>
+          </div>
+
+          {subTopicForm.hasQuiz && (
+            <div className={'p-4 rounded-lg border ' + (darkMode ? 'border-gray-700 bg-gray-700/50' : 'border-gray-200 bg-gray-50')}>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className={'font-medium ' + (darkMode ? 'text-white' : 'text-gray-900')}>Quiz</h4>
+                <button
+                  type="button"
+                  onClick={() => setShowQuizModal(true)}
+                  className={'px-3 py-1.5 rounded-lg text-sm font-medium transition ' + (
+                    darkMode ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-green-600 text-white hover:bg-green-700'
+                  )}
+                >
+                  <Plus className="w-4 h-4 inline mr-1" />
+                  Add Question
+                </button>
+              </div>
+              {quizForm.questions.length > 0 && (
+                <div className="space-y-2">
+                  {quizForm.questions.map((q, idx) => (
+                    <div key={idx} className={'text-sm p-2 rounded ' + (darkMode ? 'bg-gray-800' : 'bg-white')}>
+                      <span className="font-medium">{idx + 1}.</span> {q.question}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={editingSubTopicIndex !== null ? updateSubTopic : addSubTopic}
+            className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+          >
+            {editingSubTopicIndex !== null ? 'Update Sub-topic' : 'Add Sub-topic'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render Quiz Modal
+  const renderQuizModal = () => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className={'max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 rounded-xl shadow-2xl ' + (darkMode ? 'bg-gray-800' : 'bg-white')}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className={'text-xl font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>
+            {editingQuizIndex !== null ? 'Edit Quiz' : 'Add Inline Quiz'}
+          </h3>
+          <button onClick={() => setShowQuizModal(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className={'block text-sm font-medium mb-1 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+              Quiz Title *
+            </label>
+            <input
+              type="text"
+              value={quizForm.title}
+              onChange={(e) => setQuizForm({ ...quizForm, title: e.target.value })}
+              className={'w-full px-4 py-2 rounded-lg border-2 focus:outline-none transition ' + (
+                darkMode ? 'bg-gray-700 border-gray-600 text-white focus:border-green-500' : 'bg-white border-gray-200 text-gray-900 focus:border-green-500'
+              )}
+              placeholder="e.g., Python Basics Quiz"
+            />
+          </div>
+
+          <div className={'p-4 rounded-lg border ' + (darkMode ? 'border-gray-700 bg-gray-700/50' : 'border-gray-200 bg-gray-50')}>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className={'font-medium ' + (darkMode ? 'text-white' : 'text-gray-900')}>Questions</h4>
+              <button
+                type="button"
+                onClick={() => setShowQuestionForm(true)}
+                className={'px-3 py-1.5 rounded-lg text-sm font-medium transition ' + (
+                  darkMode ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-green-600 text-white hover:bg-green-700'
+                )}
+              >
+                <Plus className="w-4 h-4 inline mr-1" />
+                Add Question
+              </button>
+            </div>
+            {quizForm.questions.length === 0 && (
+              <p className={'text-sm ' + (darkMode ? 'text-gray-400' : 'text-gray-500')}>
+                No questions added yet. Click "Add Question" to create your first question.
+              </p>
+            )}
+            {quizForm.questions.map((q, idx) => (
+              <div key={q.id || idx} className={'flex items-start justify-between p-3 rounded-lg mb-2 ' + (darkMode ? 'bg-gray-800' : 'bg-white')}>
+                <div className="flex-1">
+                  <span className="font-medium">{idx + 1}.</span> {q.question}
+                  <div className="text-xs mt-1 text-gray-500">
+                    Correct answer: {q.options[q.correctAnswer]}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuizForm({
+                      ...quizForm,
+                      questions: quizForm.questions.filter((_, i) => i !== idx),
+                    });
+                  }}
+                  className="text-red-500 hover:text-red-700 ml-2"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={addQuiz}
+            className="w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+          >
+            {editingQuizIndex !== null ? 'Update Quiz' : 'Save Quiz'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderQuestionForm = () => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className={'max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 rounded-xl shadow-2xl ' + (darkMode ? 'bg-gray-800' : 'bg-white')}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className={'text-lg font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>
+            Add Question
+          </h3>
+          <button onClick={() => setShowQuestionForm(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className={'block text-sm font-medium mb-1 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+              Question *
+            </label>
+            <textarea
+              value={questionForm.question}
+              onChange={(e) => setQuestionForm({ ...questionForm, question: e.target.value })}
+              rows="2"
+              className={'w-full px-4 py-2 rounded-lg border-2 focus:outline-none transition ' + (
+                darkMode ? 'bg-gray-700 border-gray-600 text-white focus:border-green-500' : 'bg-white border-gray-200 text-gray-900 focus:border-green-500'
+              )}
+              placeholder="Enter your question"
+            />
+          </div>
+          <div>
+            <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+              Options *
+            </label>
+            <div className="space-y-2">
+              {questionForm.options.map((option, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="correctAnswer"
+                    checked={questionForm.correctAnswer === idx}
+                    onChange={() => setQuestionForm({ ...questionForm, correctAnswer: idx })}
+                    className="w-4 h-4 text-green-600"
+                  />
+                  <input
+                    type="text"
+                    value={option}
+                    onChange={(e) => {
+                      const newOptions = [...questionForm.options];
+                      newOptions[idx] = e.target.value;
+                      setQuestionForm({ ...questionForm, options: newOptions });
+                    }}
+                    className={'flex-1 px-3 py-2 rounded-lg border-2 focus:outline-none transition ' + (
+                      darkMode ? 'bg-gray-700 border-gray-600 text-white focus:border-green-500' : 'bg-white border-gray-200 text-gray-900 focus:border-green-500'
+                    )}
+                    placeholder={`Option ${idx + 1}`}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className={'block text-sm font-medium mb-1 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+              Explanation (optional)
+            </label>
+            <textarea
+              value={questionForm.explanation}
+              onChange={(e) => setQuestionForm({ ...questionForm, explanation: e.target.value })}
+              rows="2"
+              className={'w-full px-4 py-2 rounded-lg border-2 focus:outline-none transition ' + (
+                darkMode ? 'bg-gray-700 border-gray-600 text-white focus:border-green-500' : 'bg-white border-gray-200 text-gray-900 focus:border-green-500'
+              )}
+              placeholder="Explain the correct answer"
+            />
+          </div>
+          <button
+            onClick={() => {
+              if (!questionForm.question.trim()) {
+                showNotification('Please enter a question', 'error');
+                return;
+              }
+              if (questionForm.options.some(opt => !opt.trim())) {
+                showNotification('Please fill in all options', 'error');
+                return;
+              }
+              setQuizForm({
+                ...quizForm,
+                questions: [...quizForm.questions, { ...questionForm, id: Date.now() }],
+              });
+              setQuestionForm({
+                question: '',
+                options: ['', '', '', ''],
+                correctAnswer: 0,
+                explanation: '',
+              });
+              setShowQuestionForm(false);
+              showNotification('Question added!', 'success');
+            }}
+            className="w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+          >
+            Add Question
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Main Render
+  return (
+    <div className={`space-y-6 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'} p-6 rounded-xl`}>
+      {/* Notification */}
+      {notification && (
+        <div className={`p-4 rounded-lg flex items-center gap-3 ${
+          notification.type === 'error'
+            ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-2 border-red-200 dark:border-red-800'
+            : notification.type === 'success'
+            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-2 border-green-200 dark:border-green-800'
+            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-2 border-blue-200 dark:border-blue-800'
+        }`}>
+          {notification.type === 'error' ? <AlertCircle className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+          {notification.message}
+        </div>
+      )}
+
+      {saveSuccess && (
+        <div className="p-4 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-2 border-green-200 dark:border-green-800 flex items-center gap-3">
+          <CheckCircle className="w-5 h-5" />
+          Content saved successfully! ✅
+        </div>
+      )}
+
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className={`font-bold text-xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+              Course Blocks ({blocks.length})
+            </h3>
+            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Organize your course into blocks with subtopics, notes, and quizzes
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setEditingBlockIndex(null);
+              setBlockForm({ title: '', description: '', isLocked: false, passingScore: 70 });
+              setShowBlockModal(true);
+            }}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Block
+          </button>
+        </div>
+
+        {blocks.length === 0 ? (
+          <div className={'p-8 text-center rounded-xl border-2 border-dashed ' + (darkMode ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500')}>
+            <Layers className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <p className="font-medium">No blocks yet - Add your first block to start building content</p>
+            <p className="text-sm">Click "Add Block" to create your first lesson or module</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {blocks.map((block, blockIndex) => (
+              <div key={block.id || blockIndex} className={'rounded-lg border-2 overflow-hidden ' + (darkMode ? 'border-gray-700' : 'border-gray-200')}>
+                <div className={'p-4 border-b ' + (darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200')}>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className={'font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>
+                          Block {blockIndex + 1}: {block.title}
+                        </h4>
+                        {block.isLocked && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-300 flex items-center gap-1">
+                            <Lock className="w-3 h-3" /> Locked
+                          </span>
+                        )}
+                      </div>
+                      {block.description && (
+                        <p className={'text-sm ' + (darkMode ? 'text-gray-400' : 'text-gray-500')}>
+                          {block.description}
+                        </p>
+                      )}
+                      <div className="flex gap-4 mt-1 text-xs">
+                        <span className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
+                          {block.subTopics.length} subtopics
+                        </span>
+                        <span className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
+                          Progress: {block.progress || 0}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setCurrentBlockIndex(blockIndex);
+                          setEditingSubTopicIndex(null);
+                          setSubTopicForm({ title: '', content: '', type: 'text', duration: '', hasQuiz: false, quizId: null, resources: [], files: [] });
+                          setShowSubTopicModal(true);
+                        }}
+                        className={'p-2 rounded-lg ' + (darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100')}
+                      >
+                        <Plus className="w-4 h-4 text-indigo-500" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingBlockIndex(blockIndex);
+                          setBlockForm({
+                            title: block.title,
+                            description: block.description || '',
+                            isLocked: block.isLocked || false,
+                            passingScore: block.passingScore || 70
+                          });
+                          setShowBlockModal(true);
+                        }}
+                        className={'p-2 rounded-lg ' + (darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100')}
+                      >
+                        <Edit2 className="w-4 h-4 text-blue-500" />
+                      </button>
+                      <button
+                        onClick={() => deleteBlock(blockIndex)}
+                        className={'p-2 rounded-lg ' + (darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100')}
+                      >
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {block.subTopics.length === 0 ? (
+                    <div className={'p-4 text-center ' + (darkMode ? 'text-gray-400' : 'text-gray-500')}>
+                      <p className="text-sm">No subtopics yet. Click + to add notes and content.</p>
+                    </div>
+                  ) : (
+                    block.subTopics.map((subTopic, subIndex) => (
+                      <div key={subTopic.id || subIndex} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={'text-sm font-medium ' + (darkMode ? 'text-gray-400' : 'text-gray-500')}>
+                                {subIndex + 1}.
+                              </span>
+                              <h5 className={'font-medium ' + (darkMode ? 'text-white' : 'text-gray-900')}>
+                                {subTopic.title}
+                              </h5>
+                              <span className={'text-xs px-2 py-0.5 rounded-full ' + (
+                                subTopic.type === 'text' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300' :
+                                subTopic.type === 'video' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300' :
+                                subTopic.type === 'quiz' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-300' :
+                                subTopic.type === 'code' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300' :
+                                subTopic.type === 'file' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300' :
+                                'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                              )}>
+                                {subTopic.type.charAt(0).toUpperCase() + subTopic.type.slice(1)}
+                              </span>
+                              {subTopic.hasQuiz && subTopic.quizData && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-300 flex items-center gap-1">
+                                  <Brain className="w-3 h-3" /> {subTopic.quizData.questions?.length || 0} questions
+                                </span>
+                              )}
+                              {subTopic.duration && (
+                                <span className={'text-xs ' + (darkMode ? 'text-gray-400' : 'text-gray-500')}>
+                                  <Clock className="w-3 h-3 inline mr-1" />
+                                  {subTopic.duration}
+                                </span>
+                              )}
+                            </div>
+                            {subTopic.content && (
+                              <div className={'mt-2 text-sm ' + (darkMode ? 'text-gray-300' : 'text-gray-600') + ' line-clamp-2'}>
+                                {subTopic.content}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => {
+                                setCurrentBlockIndex(blockIndex);
+                                setEditingSubTopicIndex(subIndex);
+                                const subTopicData = blocks[blockIndex].subTopics[subIndex];
+                                setSubTopicForm({
+                                  title: subTopicData.title,
+                                  content: subTopicData.content || '',
+                                  type: subTopicData.type || 'text',
+                                  duration: subTopicData.duration || '',
+                                  hasQuiz: subTopicData.hasQuiz || false,
+                                  quizId: subTopicData.quizId || null,
+                                  resources: subTopicData.resources || [],
+                                  files: subTopicData.files || []
+                                });
+                                if (subTopicData.hasQuiz && subTopicData.quizData) {
+                                  setQuizForm(subTopicData.quizData);
+                                }
+                                setShowSubTopicModal(true);
+                              }}
+                              className={'p-1.5 rounded ' + (darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100')}
+                            >
+                              <Edit2 className="w-4 h-4 text-blue-500" />
+                            </button>
+                            <button
+                              onClick={() => deleteSubTopic(blockIndex, subIndex)}
+                              className={'p-1.5 rounded ' + (darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100')}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Save Button */}
+      <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+        <button
+          onClick={handleSaveContent}
+          disabled={isSaving}
+          className={`px-8 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${
+            isSaving 
+              ? 'bg-gray-400 cursor-not-allowed' 
+              : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:shadow-lg hover:shadow-emerald-500/25'
+          } text-white`}
+        >
+          {isSaving ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="w-5 h-5" />
+              Save All Content
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Modals */}
+      {showBlockModal && renderBlockModal()}
+      {showSubTopicModal && renderSubTopicModal()}
+      {showQuizModal && renderQuizModal()}
+      {showQuestionForm && renderQuestionForm()}
+    </div>
+  );
+};
+
+export default BlockBasedCourseCreator;

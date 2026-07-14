@@ -1,0 +1,3047 @@
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { apiEndpoints, apiCall, uploadFile } from "../../config/apiConfig";
+
+const MyCourses = ({ darkMode }) => {
+  const [courses, setCourses] = useState([]);
+  const [stats, setStats] = useState({
+    total_courses: 0,
+    total_students: 0,
+    total_revenue: 0,
+    average_rating: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [courseToEdit, setCourseToEdit] = useState(null);
+  const [editTab, setEditTab] = useState("info");
+  const [sections, setSections] = useState([]);
+  const [isStructureLoading, setIsStructureLoading] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewCourse, setPreviewCourse] = useState(null);
+  const [selectedPreviewLesson, setSelectedPreviewLesson] = useState(null);
+  const [showEditSectionModal, setShowEditSectionModal] = useState(false);
+  const [sectionToEdit, setSectionToEdit] = useState(null);
+  const [showEditLessonModal, setShowEditLessonModal] = useState(false);
+  const [lessonToEdit, setLessonToEdit] = useState(null);
+  const [showFrontendModal, setShowFrontendModal] = useState(false);
+  const [frontendData, setFrontendData] = useState({
+    html: "<h1>Hello World</h1>",
+    css: "h1 { color: purple; }",
+    js: "console.log('Live Preview Loaded');",
+  });
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [currentLessonId, setCurrentLessonId] = useState(null);
+  const [quizFormData, setQuizFormData] = useState({
+    title: "",
+    passing_score: 70,
+    questions: [],
+  });
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [courseToDelete, setCourseToDelete] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    level: "Beginner",
+    category: "Development",
+    price: "",
+    image_url: "",
+    xpReward: 100,
+  });
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [editImagePreview, setEditImagePreview] = useState(null);
+  const [isUploadingEditImage, setIsUploadingEditImage] = useState(false);
+  const fileInputRef = useRef(null);
+  const editFileInputRef = useRef(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [coursesRes, statsRes] = await Promise.all([
+        apiCall(apiEndpoints.instructor.courses),
+        apiCall(apiEndpoints.instructor.stats),
+      ]);
+
+      if (coursesRes && !coursesRes.error) setCourses(coursesRes);
+      if (statsRes && !statsRes.error) setStats(statsRes);
+    } catch (error) {
+      console.error("Error fetching instructor data:", error);
+      // Errors are already toasted by apiCall
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const fetchCourseStructure = async (courseId) => {
+    setIsStructureLoading(true);
+    try {
+      const data = await apiCall(
+        apiEndpoints.instructor.courseStructure(courseId),
+      );
+      if (data && !data.error) {
+        setSections(data.sections || []);
+      }
+    } catch (error) {
+      console.error("Error fetching structure:", error);
+    } finally {
+      setIsStructureLoading(false);
+    }
+  };
+
+  const handleAddSection = async () => {
+    try {
+      const result = await apiCall(
+        apiEndpoints.instructor.courseSections(courseToEdit.id),
+        { method: "POST", body: { title: "New Section" } },
+      );
+      if (result && !result.error) fetchCourseStructure(courseToEdit.id);
+    } catch (error) {
+      console.error("Error adding section:", error); // apiCall already logs and toasts
+    }
+  };
+
+  const handleDeleteSection = async (sectionId) => {
+    if (!window.confirm("Delete this section and all its lessons?")) return;
+    try {
+      const result = await apiCall(apiEndpoints.instructor.section(sectionId), {
+        method: "DELETE",
+      });
+      if (result && !result.error) {
+        fetchCourseStructure(courseToEdit.id);
+      } else {
+        // Error is already toasted by apiCall
+      }
+    } catch (error) {
+      console.error("Error deleting section:", error);
+    }
+  };
+
+  const handleUpdateSection = async () => {
+    try {
+      const result = await apiCall(
+        apiEndpoints.instructor.section(sectionToEdit.id),
+        {
+          method: "PUT",
+          body: { title: sectionToEdit.title },
+        },
+      );
+      if (result && !result.error) {
+        setShowEditSectionModal(false);
+        fetchCourseStructure(courseToEdit.id);
+      }
+    } catch (error) {
+      console.error("Error updating section:", error);
+    }
+  };
+
+  const handleAddLesson = async (sectionId) => {
+    try {
+      const result = await apiCall(
+        apiEndpoints.instructor.sectionLessons(sectionId),
+        { method: "POST", body: { title: "New Lesson", type: "video" } },
+      );
+      if (result && !result.error) fetchCourseStructure(courseToEdit.id);
+    } catch (error) {
+      console.error("Error adding lesson:", error); // apiCall already logs and toasts
+    }
+  };
+
+  const handleDeleteLesson = async (lessonId) => {
+    if (!window.confirm("Delete this lesson?")) return;
+    try {
+      const result = await apiCall(apiEndpoints.instructor.lesson(lessonId), {
+        method: "DELETE",
+      });
+      if (result && !result.error) {
+        fetchCourseStructure(courseToEdit.id);
+      }
+    } catch (error) {
+      console.error("Error deleting lesson:", error);
+    }
+  };
+
+  const handleUpdateLesson = async () => {
+    try {
+      const result = await apiCall(
+        apiEndpoints.instructor.lesson(lessonToEdit.id),
+        { method: "PUT", body: { title: lessonToEdit.title, content_url: lessonToEdit.content_url || "" } },
+      );
+      if (result && !result.error) {
+        setShowEditLessonModal(false);
+        fetchCourseStructure(courseToEdit.id);
+      }
+    } catch (error) {
+      console.error("Error updating lesson:", error);
+    }
+  };
+
+  const handleAddSectionQuiz = async (sectionId) => {
+    try {
+      const result = await apiCall(
+        apiEndpoints.instructor.sectionLessons(sectionId),
+        { method: "POST", body: { title: "New Quiz Assessment", type: "quiz" } },
+      );
+      if (result && !result.error) {
+        await fetchCourseStructure(courseToEdit.id);
+        openQuizBuilder(result.id);
+      }
+    } catch (error) {
+      console.error("Error adding section quiz:", error);
+    }
+  };
+
+  const openQuizBuilder = (lessonId) => {
+    setCurrentLessonId(lessonId);
+    setQuizFormData({ title: "", passing_score: 10, questions: [] });
+    setShowQuizModal(true);
+  };
+
+  const handleSaveQuiz = async () => {
+    if (!quizFormData.title.trim()) return alert("Quiz title is required");
+    if (quizFormData.questions.length === 0)
+      return alert("Please add at least one question");
+
+    try {
+      const result = await apiCall(
+        apiEndpoints.instructor.lessonQuizzes(currentLessonId),
+        { method: "POST", body: quizFormData },
+      );
+
+      if (result && !result.error) {
+        setShowQuizModal(false);
+        fetchCourseStructure(courseToEdit.id);
+      }
+    } catch (error) {
+      console.error("Error saving quiz:", error);
+    }
+  };
+
+  const handleAddFrontendLab = async (sectionId) => {
+    try {
+      const result = await apiCall(
+        apiEndpoints.instructor.sectionLessons(sectionId),
+        { method: "POST", body: { title: "New Frontend Coding Lab", type: "frontend" } },
+      );
+
+      if (result && !result.error) {
+        await fetchCourseStructure(courseToEdit.id);
+        setCurrentLessonId(result.id);
+        setFrontendData({
+          html: "<h1>Hello World</h1>",
+          css: "h1 { color: purple; }",
+          js: "console.log('Live Preview Loaded');",
+        });
+        setShowFrontendModal(true);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const saveFrontendLab = async () => {
+    try {
+      const result = await apiCall(
+        apiEndpoints.instructor.lessonFrontend(currentLessonId),
+        {
+          method: "PUT",
+          body: { html_content: frontendData.html, css_content: frontendData.css, js_content: frontendData.js },
+        },
+      );
+
+      if (result && !result.error) {
+        setShowFrontendModal(false);
+        fetchCourseStructure(courseToEdit.id);
+      } else {
+        // Error is already toasted
+      }
+    } catch (error) {
+      console.error("Error saving frontend lab:", error);
+      alert("Error saving coding exercise");
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    if (!formData.title.trim()) newErrors.title = "Title is required";
+    else if (formData.title.length < 5)
+      newErrors.title = "Title must be at least 5 characters";
+
+    if (!formData.description.trim())
+      newErrors.description = "Description is required";
+    else if (formData.description.length < 20)
+      newErrors.description = "Description must be at least 20 characters";
+
+    if (!formData.price || isNaN(formData.price))
+      newErrors.price = "Price must be a number";
+    else if (parseFloat(formData.price) < 0)
+      newErrors.price = "Price cannot be negative";
+
+    setFormErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validateEditForm = () => {
+    const newErrors = {};
+    if (!courseToEdit?.title?.trim()) newErrors.title = "Title is required";
+    else if (courseToEdit?.title?.length < 5)
+      newErrors.title = "Title must be at least 5 characters";
+
+    if (!courseToEdit?.description?.trim())
+      newErrors.description = "Description is required";
+    else if (courseToEdit?.description?.length < 20)
+      newErrors.description = "Description must be at least 20 characters";
+
+    if (!courseToEdit?.price || isNaN(courseToEdit.price))
+      newErrors.price = "Price must be a number";
+    else if (parseFloat(courseToEdit.price) < 0)
+      newErrors.price = "Price cannot be negative";
+
+    setFormErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleImageSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Image size must be less than 2MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+
+    setIsUploadingImage(true);
+    const result = await uploadFile(file);
+    setIsUploadingImage(false);
+
+    if (result && !result.error) {
+      setFormData((prev) => ({ ...prev, image_url: result.image_url }));
+    } else {
+      // Error is already toasted by apiCall
+      setImagePreview(null);
+    }
+  };
+
+  const handleEditImageSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Image size must be less than 2MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => setEditImagePreview(reader.result);
+    reader.readAsDataURL(file);
+
+    setIsUploadingEditImage(true);
+    const result = await uploadFile(file);
+    setIsUploadingEditImage(false);
+
+    if (result && !result.error) {
+      setCourseToEdit((prev) => ({ ...prev, image_url: result.image_url }));
+    } else {
+      // Error is already toasted by apiCall
+      setEditImagePreview(courseToEdit.image_url);
+    }
+  };
+
+  const handleCreateCourse = async (e) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+    if (isUploadingImage) {
+      alert("Please wait for the image to finish uploading.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const courseData = {
+        ...formData,
+        price: parseFloat(formData.price),
+        image_url:
+          formData.image_url ||
+          "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=500&h=280&fit=crop",
+      };
+
+      const newCourseResult = await apiCall(apiEndpoints.instructor.courses, {
+        method: "POST",
+        body: courseData,
+      });
+
+      if (newCourseResult && !newCourseResult.error) {
+        await fetchData(); // Refreshes the main list of courses
+        setShowCreateModal(false);
+        setFormData({
+          title: "",
+          description: "",
+          level: "Beginner",
+          category: "Development",
+          price: "",
+          image_url: "",
+          xpReward: 100,
+        });
+        setImagePreview(null);
+
+        if (newCourseResult.course) {
+          // Open the edit modal to the curriculum tab
+          handleEditClick(newCourseResult.course);
+          setEditTab("curriculum");
+          // Notify user of next step
+          setTimeout(() => alert("Course created! Now add your curriculum."), 100);
+        } else {
+          // Fallback if the backend doesn't return the course object
+          alert("Course created successfully!");
+        }
+      } else {
+        // Error is already toasted by apiCall
+      }
+    } catch (error) {
+      console.error("Error creating course:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEditClick = (course) => {
+    setCourseToEdit({ ...course });
+    setEditImagePreview(course.image_url);
+    setFormErrors({});
+    setEditTab("info");
+    setShowEditModal(true);
+    fetchCourseStructure(course.id);
+  };
+
+  const handlePreviewClick = async (course) => {
+    setPreviewCourse(course);
+    await fetchCourseStructure(course.id);
+    setSelectedPreviewLesson(null);
+    setShowPreviewModal(true);
+  };
+
+  const handleUpdateCourse = async (e) => {
+    e.preventDefault();
+    if (!validateEditForm()) return;
+    if (isUploadingEditImage) {
+      alert("Please wait for the image to finish uploading.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const updatedCourseData = {
+        ...courseToEdit,
+        price: parseFloat(courseToEdit.price),
+      };
+      const result = await apiCall(
+        apiEndpoints.courses.update(courseToEdit.id),
+        { method: "PUT", body: updatedCourseData },
+      );
+      if (result && !result.error) {
+        await fetchData();
+        setShowEditModal(false);
+        setCourseToEdit(null);
+        alert("Course updated successfully!");
+      }
+    } catch (error) {
+      console.error("Error updating course:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteCourse = async () => {
+    if (!courseToDelete) return;
+
+    setIsSubmitting(true);
+    try {
+      const result = await apiCall(
+        apiEndpoints.courses.delete(courseToDelete.id),
+        { method: "DELETE" },
+      );
+
+      if (result && !result.error) {
+        await fetchData();
+        setShowDeleteModal(false);
+        setCourseToDelete(null);
+        alert("Course deleted successfully!");
+      }
+    } catch (error) {
+      console.error("Error deleting course:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const theme = {
+    bg: darkMode ? "#111827" : "#f9fafb",
+    cardBg: darkMode ? "#1f2937" : "#ffffff",
+    text: darkMode ? "#f9fafb" : "#111827",
+    textSecondary: darkMode ? "#9ca3af" : "#6b7280",
+    accent: "#6366f1",
+    border: darkMode ? "#374151" : "#e5e7eb",
+  };
+
+  const containerStyle = {
+    padding: "2rem",
+    backgroundColor: theme.bg,
+    minHeight: "100vh",
+    color: theme.text,
+    fontFamily: "'Inter', sans-serif",
+  };
+
+  const inputStyle = (error) => ({
+    width: "100%",
+    padding: "0.75rem 1rem",
+    borderRadius: "0.5rem",
+    border: `1px solid ${error ? "#ef4444" : theme.border}`,
+    backgroundColor: darkMode ? "#111827" : "#ffffff",
+    color: theme.text,
+    marginTop: "0.25rem",
+    outline: "none",
+    transition: "border-color 0.2s",
+  });
+
+  if (loading)
+    return (
+      <div
+        style={{
+          textAlign: "center",
+          padding: "100px",
+          color: theme.textSecondary,
+        }}
+      >
+        Initializing Dashboard...
+      </div>
+    );
+
+  return (
+    <div style={containerStyle}>
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+          marginBottom: "2rem",
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              fontSize: "2rem",
+              fontWeight: "800",
+              letterSpacing: "-0.025em",
+              margin: 0,
+            }}
+          >
+            Instructor Dashboard
+          </h1>
+          <p style={{ color: theme.textSecondary, marginTop: "0.5rem" }}>
+            Curate your courses and monitor student growth.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            setShowCreateModal(true);
+            setFormErrors({});
+            setFormData({
+              title: "",
+              description: "",
+              level: "Beginner",
+              category: "Development",
+              price: "",
+              image_url: "",
+              xpReward: 100,
+            });
+            setImagePreview(null);
+          }}
+          style={{
+            backgroundColor: theme.accent,
+            color: "white",
+            padding: "0.75rem 1.5rem",
+            borderRadius: "0.5rem",
+            border: "none",
+            fontWeight: "600",
+            cursor: "pointer",
+            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+          }}
+        >
+          + Create New Course
+        </button>
+      </header>
+
+      {/* KPI Section */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: "1.5rem",
+          marginBottom: "3rem",
+        }}
+      >
+        {[
+          { label: "Total Courses", value: stats.total_courses },
+          {
+            label: "Total Students",
+            value: stats.total_students.toLocaleString(),
+          },
+          {
+            label: "Total Revenue",
+            value: `$${stats.total_revenue.toLocaleString()}`,
+          },
+          { label: "Avg. Rating", value: `${stats.average_rating} ⭐` },
+        ].map((stat, i) => (
+          <div
+            key={i}
+            style={{
+              backgroundColor: theme.cardBg,
+              padding: "1.5rem",
+              borderRadius: "1rem",
+              border: `1px solid ${theme.border}`,
+              boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.1)",
+            }}
+          >
+            <div
+              style={{
+                color: theme.textSecondary,
+                fontSize: "0.875rem",
+                fontWeight: "600",
+                textTransform: "uppercase",
+              }}
+            >
+              {stat.label}
+            </div>
+            <div
+              style={{
+                fontSize: "1.75rem",
+                fontWeight: "800",
+                marginTop: "0.5rem",
+              }}
+            >
+              {stat.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Management Section */}
+      <div
+        style={{
+          backgroundColor: theme.cardBg,
+          borderRadius: "1rem",
+          border: `1px solid ${theme.border}`,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            padding: "1.5rem",
+            borderBottom: `1px solid ${theme.border}`,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <h2 style={{ fontSize: "1.25rem", fontWeight: "700", margin: 0 }}>
+            My Courses
+          </h2>
+          <input
+            type="text"
+            placeholder="Search by title..."
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              padding: "0.625rem 1rem",
+              borderRadius: "0.5rem",
+              border: `1px solid ${theme.border}`,
+              backgroundColor: theme.bg,
+              color: theme.text,
+              width: "300px",
+            }}
+          />
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr
+                style={{
+                  textAlign: "left",
+                  color: theme.textSecondary,
+                  fontSize: "0.75rem",
+                  textTransform: "uppercase",
+                  backgroundColor: darkMode ? "#111827" : "#f9fafb",
+                }}
+              >
+                <th style={{ padding: "1rem 1.5rem" }}>Course Info</th>
+                <th style={{ padding: "1rem" }}>Level</th>
+                <th style={{ padding: "1rem" }}>Students</th>
+                <th style={{ padding: "1rem" }}>Price</th>
+                <th style={{ padding: "1rem 1.5rem" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {courses
+                .filter((c) =>
+                  c.title.toLowerCase().includes(searchTerm.toLowerCase()),
+                )
+                .map((course) => (
+                  <tr
+                    key={course.id}
+                    style={{ borderBottom: `1px solid ${theme.border}` }}
+                  >
+                    <td style={{ padding: "1.25rem 1.5rem" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "1rem",
+                        }}
+                      >
+                        <img
+                          src={course.image_url}
+                          alt=""
+                          style={{
+                            width: "60px",
+                            height: "40px",
+                            borderRadius: "0.375rem",
+                            objectFit: "cover",
+                          }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: "700" }}>
+                            {course.title}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "0.75rem",
+                              color: theme.textSecondary,
+                            }}
+                          >
+                            ID: #{course.id}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: "1rem" }}>
+                      <span
+                        style={{
+                          padding: "0.25rem 0.625rem",
+                          borderRadius: "0.375rem",
+                          fontSize: "0.75rem",
+                          fontWeight: "600",
+                          backgroundColor: darkMode ? "#374151" : "#f3f4f6",
+                        }}
+                      >
+                        {course.level}
+                      </span>
+                    </td>
+                    <td style={{ padding: "1rem", fontWeight: "600" }}>
+                      {course.student_count}
+                    </td>
+                    <td style={{ padding: "1rem", fontWeight: "600" }}>
+                      ${course.price || 0}
+                    </td>
+                    <td style={{ padding: "1.25rem 1.5rem" }}>
+                      <div style={{ display: "flex", gap: "1rem" }}>
+                        <button
+                          onClick={() => handleEditClick(course)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: theme.accent,
+                            fontWeight: "700",
+                            cursor: "pointer",
+                            fontSize: "0.875rem",
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handlePreviewClick(course)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#10b981",
+                            fontWeight: "700",
+                            cursor: "pointer",
+                            fontSize: "0.875rem",
+                          }}
+                        >
+                          Preview
+                        </button>
+                        <button
+                          onClick={() => {
+                            setCourseToDelete(course);
+                            setShowDeleteModal(true);
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#ef4444",
+                            fontWeight: "700",
+                            cursor: "pointer",
+                            fontSize: "0.875rem",
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+          {courses.length === 0 && (
+            <div
+              style={{
+                padding: "4rem",
+                textAlign: "center",
+                color: theme.textSecondary,
+              }}
+            >
+              No courses found. Start by creating your first course!
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Create Course Modal */}
+      {showCreateModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: theme.cardBg,
+              padding: "2rem",
+              borderRadius: "1rem",
+              width: "100%",
+              maxWidth: "550px",
+              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1.5rem",
+              }}
+            >
+              <h2 style={{ fontSize: "1.5rem", fontWeight: "700", margin: 0 }}>
+                Create New Course
+              </h2>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "1.5rem",
+                  color: theme.textSecondary,
+                  cursor: "pointer",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCourse}>
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label
+                  style={{
+                    fontSize: "0.875rem",
+                    fontWeight: "600",
+                    color: theme.textSecondary,
+                    display: "block",
+                    marginBottom: "0.5rem",
+                  }}
+                >
+                  Course Cover Image
+                </label>
+                <div
+                  onClick={() => fileInputRef.current.click()}
+                  style={{
+                    width: "100%",
+                    height: "120px",
+                    borderRadius: "0.5rem",
+                    border: `2px dashed ${theme.border}`,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    backgroundColor: darkMode ? "#1f2937" : "#f9fafb",
+                    transition: "border-color 0.2s",
+                    position: "relative",
+                    overflow: "hidden",
+                  }}
+                >
+                  {imagePreview ? (
+                    <img
+                      src={imagePreview}
+                      alt="Course Cover Preview"
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        borderRadius: "0.5rem",
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <span
+                        style={{ fontSize: "2rem", color: theme.textSecondary }}
+                      >
+                        🖼️
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: theme.textSecondary,
+                          marginTop: "0.5rem",
+                        }}
+                      >
+                        Click to upload cover (Max 2MB)
+                      </span>
+                    </>
+                  )}
+                  {isUploadingImage && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        backgroundColor: "rgba(0,0,0,0.6)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "white",
+                        fontSize: "1rem",
+                        fontWeight: "600",
+                      }}
+                    >
+                      Uploading...
+                    </div>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  ref={fileInputRef}
+                  style={{ display: "none" }}
+                />
+              </div>
+
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label
+                  style={{
+                    fontSize: "0.875rem",
+                    fontWeight: "600",
+                    color: theme.textSecondary,
+                  }}
+                >
+                  Course Title
+                </label>
+                <input
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
+                  style={inputStyle(formErrors.title)}
+                  placeholder="e.g. Advanced React Architecture"
+                />
+                {formErrors.title && (
+                  <div
+                    style={{
+                      color: "#ef4444",
+                      fontSize: "0.75rem",
+                      marginTop: "0.25rem",
+                    }}
+                  >
+                    {formErrors.title}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label
+                  style={{
+                    fontSize: "0.875rem",
+                    fontWeight: "600",
+                    color: theme.textSecondary,
+                  }}
+                >
+                  Description
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  style={{
+                    ...inputStyle(formErrors.description),
+                    height: "100px",
+                    resize: "none",
+                  }}
+                  placeholder="What will students learn in this course?"
+                />
+                {formErrors.description && (
+                  <div
+                    style={{
+                      color: "#ef4444",
+                      fontSize: "0.75rem",
+                      marginTop: "0.25rem",
+                    }}
+                  >
+                    {formErrors.description}
+                  </div>
+                )}
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                  marginBottom: "1.25rem",
+                }}
+              >
+                <div>
+                  <label
+                    style={{
+                      fontSize: "0.875rem",
+                      fontWeight: "600",
+                      color: theme.textSecondary,
+                    }}
+                  >
+                    Category
+                  </label>
+                  <select
+                    value={formData.category}
+                    onChange={(e) =>
+                      setFormData({ ...formData, category: e.target.value })
+                    }
+                    style={inputStyle()}
+                  >
+                    <option value="Development">Development</option>
+                    <option value="Design">Design</option>
+                    <option value="Data Science">Data Science</option>
+                    <option value="Business">Business</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    style={{
+                      fontSize: "0.875rem",
+                      fontWeight: "600",
+                      color: theme.textSecondary,
+                    }}
+                  >
+                    Level
+                  </label>
+                  <select
+                    value={formData.level}
+                    onChange={(e) =>
+                      setFormData({ ...formData, level: e.target.value })
+                    }
+                    style={inputStyle()}
+                  >
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "2rem" }}>
+                <label
+                  style={{
+                    fontSize: "0.875rem",
+                    fontWeight: "600",
+                    color: theme.textSecondary,
+                  }}
+                >
+                  Price ($)
+                </label>
+                <input
+                  type="text"
+                  value={formData.price}
+                  onChange={(e) =>
+                    setFormData({ ...formData, price: e.target.value })
+                  }
+                  style={inputStyle(formErrors.price)}
+                  placeholder="49.99"
+                />
+                {formErrors.price && (
+                  <div
+                    style={{
+                      color: "#ef4444",
+                      fontSize: "0.75rem",
+                      marginTop: "0.25rem",
+                    }}
+                  >
+                    {formErrors.price}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: "flex", gap: "1rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  style={{
+                    flex: 1,
+                    padding: "0.75rem",
+                    borderRadius: "0.5rem",
+                    border: `1px solid ${theme.border}`,
+                    backgroundColor: "transparent",
+                    color: theme.text,
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || isUploadingImage}
+                  style={{
+                    flex: 1,
+                    padding: "0.75rem",
+                    borderRadius: "0.5rem",
+                    border: "none",
+                    backgroundColor: theme.accent,
+                    color: "white",
+                    fontWeight: "600",
+                    cursor:
+                      isSubmitting || isUploadingImage
+                        ? "not-allowed"
+                        : "pointer",
+                    opacity: isSubmitting || isUploadingImage ? 0.7 : 1,
+                  }}
+                >
+                  {isSubmitting
+                    ? "Creating..."
+                    : isUploadingImage
+                      ? "Uploading Image..."
+                      : "Create Course"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Course Modal */}
+      {showEditModal && courseToEdit && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: theme.cardBg,
+              padding: "2rem",
+              borderRadius: "1rem",
+              width: "100%",
+              maxWidth: "550px",
+              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1.5rem",
+              }}
+            >
+              <h2 style={{ fontSize: "1.5rem", fontWeight: "700", margin: 0 }}>
+                Edit Course
+              </h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "1.5rem",
+                  color: theme.textSecondary,
+                  cursor: "pointer",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "1.5rem",
+                marginBottom: "1.5rem",
+                borderBottom: `1px solid ${theme.border}`,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setEditTab("info")}
+                style={{
+                  padding: "0.5rem 0",
+                  borderBottom:
+                    editTab === "info" ? `2px solid ${theme.accent}` : "none",
+                  color:
+                    editTab === "info" ? theme.accent : theme.textSecondary,
+                  background: "none",
+                  borderTop: "none",
+                  borderLeft: "none",
+                  borderRight: "none",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Basic Info
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditTab("curriculum")}
+                style={{
+                  padding: "0.5rem 0",
+                  borderBottom:
+                    editTab === "curriculum"
+                      ? `2px solid ${theme.accent}`
+                      : "none",
+                  color:
+                    editTab === "curriculum"
+                      ? theme.accent
+                      : theme.textSecondary,
+                  background: "none",
+                  borderTop: "none",
+                  borderLeft: "none",
+                  borderRight: "none",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Curriculum
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateCourse}>
+              {editTab === "info" ? (
+                <>
+                  <div style={{ marginBottom: "1.25rem" }}>
+                    <label
+                      style={{
+                        fontSize: "0.875rem",
+                        fontWeight: "600",
+                        color: theme.textSecondary,
+                        display: "block",
+                        marginBottom: "0.5rem",
+                      }}
+                    >
+                      Course Cover Image
+                    </label>
+                    <div
+                      onClick={() => editFileInputRef.current.click()}
+                      style={{
+                        width: "100%",
+                        height: "120px",
+                        borderRadius: "0.5rem",
+                        border: `2px dashed ${theme.border}`,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        backgroundColor: darkMode ? "#1f2937" : "#f9fafb",
+                        transition: "border-color 0.2s",
+                        position: "relative",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {editImagePreview ? (
+                        <img
+                          src={editImagePreview}
+                          alt="Preview"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      ) : (
+                        <span style={{ color: theme.textSecondary }}>
+                          🖼️ Click to upload
+                        </span>
+                      )}
+                      {isUploadingEditImage && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            backgroundColor: "rgba(0,0,0,0.6)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "white",
+                          }}
+                        >
+                          Uploading...
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleEditImageSelect}
+                      ref={editFileInputRef}
+                      style={{ display: "none" }}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: "1.25rem" }}>
+                    <label
+                      style={{
+                        fontSize: "0.875rem",
+                        fontWeight: "600",
+                        color: theme.textSecondary,
+                      }}
+                    >
+                      Course Title
+                    </label>
+                    <input
+                      type="text"
+                      value={courseToEdit.title}
+                      onChange={(e) =>
+                        setCourseToEdit({
+                          ...courseToEdit,
+                          title: e.target.value,
+                        })
+                      }
+                      style={inputStyle(formErrors.title)}
+                    />
+                    {formErrors.title && (
+                      <div style={{ color: "#ef4444", fontSize: "0.75rem" }}>
+                        {formErrors.title}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ marginBottom: "1.25rem" }}>
+                    <label
+                      style={{
+                        fontSize: "0.875rem",
+                        fontWeight: "600",
+                        color: theme.textSecondary,
+                      }}
+                    >
+                      Description
+                    </label>
+                    <textarea
+                      value={courseToEdit.description}
+                      onChange={(e) =>
+                        setCourseToEdit({
+                          ...courseToEdit,
+                          description: e.target.value,
+                        })
+                      }
+                      style={{
+                        ...inputStyle(formErrors.description),
+                        height: "100px",
+                        resize: "none",
+                      }}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "1rem",
+                      marginBottom: "1.25rem",
+                    }}
+                  >
+                    <div>
+                      <label
+                        style={{
+                          fontSize: "0.875rem",
+                          fontWeight: "600",
+                          color: theme.textSecondary,
+                        }}
+                      >
+                        Category
+                      </label>
+                      <select
+                        value={courseToEdit.category}
+                        onChange={(e) =>
+                          setCourseToEdit({
+                            ...courseToEdit,
+                            category: e.target.value,
+                          })
+                        }
+                        style={inputStyle()}
+                      >
+                        <option value="Development">Development</option>
+                        <option value="Design">Design</option>
+                        <option value="Data Science">Data Science</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          fontSize: "0.875rem",
+                          fontWeight: "600",
+                          color: theme.textSecondary,
+                        }}
+                      >
+                        Level
+                      </label>
+                      <select
+                        value={courseToEdit.level}
+                        onChange={(e) =>
+                          setCourseToEdit({
+                            ...courseToEdit,
+                            level: e.target.value,
+                          })
+                        }
+                        style={inputStyle()}
+                      >
+                        <option value="Beginner">Beginner</option>
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Advanced">Advanced</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: "2rem" }}>
+                    <label
+                      style={{
+                        fontSize: "0.875rem",
+                        fontWeight: "600",
+                        color: theme.textSecondary,
+                      }}
+                    >
+                      Price ($)
+                    </label>
+                    <input
+                      type="text"
+                      value={courseToEdit.price}
+                      onChange={(e) =>
+                        setCourseToEdit({
+                          ...courseToEdit,
+                          price: e.target.value,
+                        })
+                      }
+                      style={inputStyle(formErrors.price)}
+                    />
+                  </div>
+
+                  <div style={{ display: "flex", gap: "1rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowEditModal(false)}
+                      style={{
+                        flex: 1,
+                        padding: "0.75rem",
+                        borderRadius: "0.5rem",
+                        border: `1px solid ${theme.border}`,
+                        backgroundColor: "transparent",
+                        color: theme.text,
+                        fontWeight: "600",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || isUploadingEditImage}
+                      style={{
+                        flex: 1,
+                        padding: "0.75rem",
+                        borderRadius: "0.5rem",
+                        border: "none",
+                        backgroundColor: theme.accent,
+                        color: "white",
+                        fontWeight: "600",
+                        cursor:
+                          isSubmitting || isUploadingEditImage
+                            ? "not-allowed"
+                            : "pointer",
+                        opacity: isSubmitting || isUploadingEditImage ? 0.7 : 1,
+                      }}
+                    >
+                      {isSubmitting
+                        ? "Saving..."
+                        : isUploadingEditImage
+                          ? "Uploading Image..."
+                          : "Save Changes"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div style={{ minHeight: "300px" }}>
+                  {isStructureLoading ? (
+                    <div
+                      style={{
+                        textAlign: "center",
+                        padding: "2rem",
+                        color: theme.textSecondary,
+                      }}
+                    >
+                      Loading curriculum...
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "1rem",
+                      }}
+                    >
+                      {sections.map((section) => (
+                        <div
+                          key={section.id}
+                          style={{
+                            border: `1px solid ${theme.border}`,
+                            borderRadius: "0.75rem",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              backgroundColor: darkMode ? "#374151" : "#f9fafb",
+                              padding: "0.75rem 1rem",
+                              borderBottom: `1px solid ${theme.border}`,
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                            }}
+                          >
+                            <span
+                              style={{ fontWeight: "700", fontSize: "0.9rem" }}
+                            >
+                              📁 {section.title}
+                            </span>
+                            <div style={{ display: "flex", gap: "1rem" }}>
+                              <button
+                                type="button"
+                                onClick={() => handleAddLesson(section.id)}
+                                style={{
+                                  color: theme.accent,
+                                  background: "none",
+                                  border: "none",
+                                  fontWeight: "700",
+                                  cursor: "pointer",
+                                  fontSize: "0.75rem",
+                                }}
+                              >
+                                + Add Lesson
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleAddSectionQuiz(section.id)}
+                                style={{
+                                  color: "#10b981",
+                                  background: "none",
+                                  border: "none",
+                                  fontWeight: "700",
+                                  cursor: "pointer",
+                                  fontSize: "0.75rem",
+                                }}
+                              >
+                                + Add Quiz
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleAddFrontendLab(section.id)}
+                                style={{
+                                  color: "#6366f1",
+                                  background: "none",
+                                  border: "none",
+                                  fontWeight: "700",
+                                  cursor: "pointer",
+                                  fontSize: "0.75rem",
+                                }}
+                              >
+                                + Add Coding Lab
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSectionToEdit(section);
+                                  setShowEditSectionModal(true);
+                                }}
+                                style={{
+                                  color: theme.accent,
+                                  background: "none",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  fontSize: "0.75rem",
+                                }}
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSection(section.id)}
+                                style={{
+                                  color: "#ef4444",
+                                  background: "none",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  fontSize: "0.75rem",
+                                }}
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+                          <div style={{ padding: "0.5rem" }}>
+                            {section.lessons?.map((lesson) => (
+                              <div
+                                key={lesson.id}
+                                style={{
+                                  padding: "0.5rem 0.75rem",
+                                  margin: "0.25rem 0",
+                                  borderRadius: "0.5rem",
+                                  backgroundColor: darkMode
+                                    ? "#1f2937"
+                                    : "#ffffff",
+                                  border: `1px solid ${theme.border}`,
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                  }}
+                                >
+                                  <span style={{ fontSize: "0.85rem" }}>
+                                    {lesson.type === "quiz"
+                                      ? "📝"
+                                      : lesson.type === "frontend"
+                                        ? "💻"
+                                        : "📄"}{" "}
+                                    {lesson.title}
+                                  </span>
+                                  {lesson.quiz && (
+                                    <span
+                                      style={{
+                                        fontSize: "0.75rem",
+                                        color: theme.textSecondary,
+                                        marginLeft: "1.2rem",
+                                      }}
+                                    >
+                                      Quiz Linked: {lesson.quiz.title} (
+                                      {lesson.quiz.questions?.length || 0}{" "}
+                                      questions)
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ display: "flex", gap: "0.5rem" }}>
+                                  {lesson.type === "quiz" && !lesson.quiz && (
+                                    <button
+                                      type="button"
+                                      onClick={() => openQuizBuilder(lesson.id)}
+                                      style={{
+                                        color: theme.accent,
+                                        background: "none",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        fontSize: "0.75rem",
+                                        fontWeight: "700",
+                                      }}
+                                    >
+                                      + Build Quiz
+                                    </button>
+                                  )}
+                                  {lesson.type === "frontend" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setCurrentLessonId(lesson.id);
+                                        setFrontendData({
+                                          html:
+                                            lesson.html_content ||
+                                            "<h1>Hello World</h1>",
+                                          css: lesson.css_content || "",
+                                          js: lesson.js_content || "",
+                                        });
+                                        setShowFrontendModal(true);
+                                      }}
+                                      style={{
+                                        color: theme.accent,
+                                        background: "none",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        fontSize: "0.75rem",
+                                        fontWeight: "700",
+                                      }}
+                                    >
+                                      ✏️ Edit Lab
+                                    </button>
+                                  )}
+                                  {(lesson.type === "video" ||
+                                    !lesson.type) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setLessonToEdit(lesson);
+                                        setShowEditLessonModal(true);
+                                      }}
+                                      style={{
+                                        color: theme.accent,
+                                        background: "none",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        fontSize: "0.75rem",
+                                      }}
+                                    >
+                                      ✏️ Edit
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleDeleteLesson(lesson.id)
+                                    }
+                                    style={{
+                                      background: "none",
+                                      border: "none",
+                                      color: "#ef4444",
+                                      cursor: "pointer",
+                                      fontSize: "0.75rem",
+                                    }}
+                                  >
+                                    🗑️
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                            {(!section.lessons ||
+                              section.lessons.length === 0) && (
+                              <div
+                                style={{
+                                  padding: "1rem",
+                                  textAlign: "center",
+                                  color: theme.textSecondary,
+                                  fontSize: "0.75rem",
+                                }}
+                              >
+                                No lessons yet.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={handleAddSection}
+                        style={{
+                          width: "100%",
+                          padding: "1rem",
+                          borderRadius: "0.75rem",
+                          border: `2px dashed ${theme.border}`,
+                          backgroundColor: "transparent",
+                          color: theme.textSecondary,
+                          fontWeight: "600",
+                          cursor: "pointer",
+                          marginTop: "0.5rem",
+                        }}
+                      >
+                        + Add New Chapter
+                      </button>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "1rem",
+                          marginTop: "1rem",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setShowEditModal(false)}
+                          style={{
+                            flex: 1,
+                            padding: "0.75rem",
+                            borderRadius: "0.5rem",
+                            border: `1px solid ${theme.border}`,
+                            backgroundColor: "transparent",
+                            color: theme.text,
+                            fontWeight: "600",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quiz Builder Modal */}
+      {showQuizModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1100,
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: theme.cardBg,
+              borderRadius: "1rem",
+              width: "100%",
+              maxWidth: "650px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+            }}
+          >
+            {/* Accent Bar */}
+            <div
+              style={{
+                height: "8px",
+                backgroundColor: "#a855f7",
+                borderRadius: "1rem 1rem 0 0",
+              }}
+            />
+
+            <div style={{ padding: "2rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "1.5rem",
+                }}
+              >
+                <h2 style={{ fontSize: "1.5rem", fontWeight: "700", margin: 0 }}>
+                  Quiz Builder
+                </h2>
+                <button
+                  onClick={() => setShowQuizModal(false)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    fontSize: "1.5rem",
+                    color: theme.textSecondary,
+                    cursor: "pointer",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "2fr 1fr",
+                  gap: "1rem",
+                  marginBottom: "1.5rem",
+                }}
+              >
+                <div>
+                  <label
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: "700",
+                      color: theme.textSecondary,
+                    }}
+                  >
+                    Quiz Title
+                  </label>
+                  <input
+                    type="text"
+                    value={quizFormData.title}
+                    onChange={(e) =>
+                      setQuizFormData({ ...quizFormData, title: e.target.value })
+                    }
+                    style={inputStyle()}
+                    placeholder="Enter a title..."
+                  />
+                </div>
+                <div>
+                  <label
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: "700",
+                      color: theme.textSecondary,
+                    }}
+                  >
+                    Points
+                  </label>
+                  <input
+                    type="number"
+                    value={quizFormData.passing_score}
+                    onChange={(e) =>
+                      setQuizFormData({
+                        ...quizFormData,
+                        passing_score: parseInt(e.target.value) || 0,
+                      })
+                    }
+                    style={inputStyle()}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "1.5rem" }}>
+                <h3
+                  style={{
+                    fontSize: "1rem",
+                    fontWeight: "700",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  Questions
+                </h3>
+                {quizFormData.questions.map((q, qIdx) => (
+                  <div
+                    key={qIdx}
+                    style={{
+                      padding: "1rem",
+                      border: `1px solid ${theme.border}`,
+                      borderRadius: "0.5rem",
+                      marginBottom: "1rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "0.5rem",
+                        marginBottom: "0.75rem",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.875rem",
+                          fontWeight: "600",
+                          color: theme.textSecondary,
+                          minWidth: "1.5rem",
+                        }}
+                      >
+                        {qIdx + 1}.
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="Question"
+                        value={q.text}
+                        onChange={(e) => {
+                          const qs = [...quizFormData.questions];
+                          qs[qIdx].text = e.target.value;
+                          setQuizFormData({ ...quizFormData, questions: qs });
+                        }}
+                        style={{ ...inputStyle(), flex: 1 }}
+                      />
+                      <button
+                        onClick={() =>
+                          setQuizFormData({
+                            ...quizFormData,
+                            questions: quizFormData.questions.filter(
+                              (_, i) => i !== qIdx,
+                            ),
+                          })
+                        }
+                        style={{
+                          color: "#ef4444",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "1.25rem",
+                          lineHeight: 1,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div style={{ marginLeft: "1.5rem" }}>
+                      {q.answers.map((a, aIdx) => {
+                        const isSelected = a.is_correct || false;
+                        return (
+                          <div
+                            key={aIdx}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              padding: "0.5rem 0.75rem",
+                              backgroundColor: isSelected
+                                ? "#3b82f6"
+                                : darkMode
+                                ? "#374151"
+                                : "#f3f4f6",
+                              borderRadius: "0.5rem",
+                              border: `1px solid ${isSelected ? "#3b82f6" : theme.border}`,
+                              marginBottom: "0.5rem",
+                            }}
+                          >
+                            <input
+                              type="radio"
+                              name={`q-${qIdx}`}
+                              checked={isSelected}
+                              onChange={() => {
+                                const qs = [...quizFormData.questions];
+                                if (!qs[qIdx].answers) qs[qIdx].answers = [];
+                                for (let i = 0; i < qs[qIdx].answers.length; i++) {
+                                  qs[qIdx].answers[i].is_correct = i === aIdx;
+                                }
+                                setQuizFormData({ ...quizFormData, questions: qs });
+                              }}
+                              style={{
+                                accentColor: isSelected ? "#3b82f6" : undefined,
+                              }}
+                            />
+                            <input
+                              type="text"
+                              placeholder={`Option ${aIdx + 1}`}
+                              value={a.text}
+                              onChange={(e) => {
+                                const qs = [...quizFormData.questions];
+                                if (!qs[qIdx].answers) qs[qIdx].answers = [];
+                                if (!qs[qIdx].answers[aIdx])
+                                  qs[qIdx].answers[aIdx] = {
+                                    text: "",
+                                    is_correct: false,
+                                  };
+                                qs[qIdx].answers[aIdx].text = e.target.value;
+                                setQuizFormData({ ...quizFormData, questions: qs });
+                              }}
+                              style={{
+                                ...inputStyle(),
+                                backgroundColor: isSelected
+                                  ? "transparent"
+                                  : darkMode
+                                  ? "#111827"
+                                  : "#ffffff",
+                                color: isSelected ? "white" : theme.text,
+                                border: "none",
+                                padding: "0.4rem 0",
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const qs = [...quizFormData.questions];
+                          if (!qs[qIdx].answers) qs[qIdx].answers = [];
+                          qs[qIdx].answers.push({
+                            text: "",
+                            is_correct: false,
+                          });
+                          setQuizFormData({ ...quizFormData, questions: qs });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.25rem",
+                          color: theme.accent,
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "0.875rem",
+                          fontWeight: "600",
+                          padding: "0.5rem 0",
+                        }}
+                      >
+                        + Add Option
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuizFormData({
+                      ...quizFormData,
+                      questions: [
+                        ...quizFormData.questions,
+                        {
+                          text: "",
+                          points: 1,
+                          answers: [
+                            { text: "", is_correct: true },
+                            { text: "", is_correct: false },
+                          ],
+                        },
+                      ],
+                    })
+                  }
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: `1px dashed ${theme.accent}`,
+                    color: theme.accent,
+                    background: "none",
+                    borderRadius: "0.5rem",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                  }}
+                >
+                  + Add Question
+                </button>
+              </div>
+
+              <div style={{ display: "flex", gap: "1rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowQuizModal(false)}
+                  style={{
+                    flex: 1,
+                    padding: "0.75rem",
+                    borderRadius: "0.5rem",
+                    border: `1px solid ${theme.border}`,
+                    background: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveQuiz}
+                  style={{
+                    flex: 1,
+                    padding: "0.75rem",
+                    borderRadius: "0.5rem",
+                    border: "none",
+                    background: theme.accent,
+                    color: "white",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Course Preview Modal */}
+      {showPreviewModal && previewCourse && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: theme.bg,
+            zIndex: 2000,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <header
+            style={{
+              padding: "1rem 2rem",
+              borderBottom: `1px solid ${theme.border}`,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              backgroundColor: theme.cardBg,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "1.5rem",
+                  cursor: "pointer",
+                  color: theme.text,
+                }}
+              >
+                ←
+              </button>
+              <div>
+                <h2
+                  style={{ fontSize: "1.125rem", fontWeight: "700", margin: 0 }}
+                >
+                  Preview: {previewCourse.title}
+                </h2>
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "#10b981",
+                    fontWeight: "600",
+                  }}
+                >
+                  STUDENT VIEW MODE
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowPreviewModal(false)}
+              style={{
+                padding: "0.5rem 1rem",
+                borderRadius: "0.5rem",
+                border: `1px solid ${theme.border}`,
+                backgroundColor: "transparent",
+                color: theme.text,
+                cursor: "pointer",
+              }}
+            >
+              Exit Preview
+            </button>
+          </header>
+
+          <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+            <div
+              style={{
+                flex: 1,
+                padding: "2rem",
+                overflowY: "auto",
+                backgroundColor: darkMode ? "#000" : "#f3f4f6",
+              }}
+            >
+              {selectedPreviewLesson ? (
+                <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
+                  {selectedPreviewLesson.type === "quiz" ? (
+                    <div
+                      style={{
+                        backgroundColor: theme.cardBg,
+                        padding: "3rem",
+                        borderRadius: "1rem",
+                        textAlign: "center",
+                        border: `1px solid ${theme.border}`,
+                      }}
+                    >
+                      <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>
+                        📝
+                      </div>
+                      <h2 style={{ marginBottom: "1rem" }}>
+                        {selectedPreviewLesson.title}
+                      </h2>
+                      <p
+                        style={{
+                          color: theme.textSecondary,
+                          marginBottom: "2rem",
+                        }}
+                      >
+                        Passing Score:{" "}
+                        {selectedPreviewLesson.quiz?.passing_score}%
+                      </p>
+                      <button
+                        onClick={() => alert("Starting Quiz...")}
+                        style={{
+                          backgroundColor: theme.accent,
+                          color: "white",
+                          padding: "0.75rem 2rem",
+                          borderRadius: "0.5rem",
+                          border: "none",
+                          fontWeight: "700",
+                        }}
+                      >
+                        Start Assessment
+                      </button>
+                    </div>
+                  ) : selectedPreviewLesson.type === "frontend" ? (
+                    <div
+                      style={{
+                        backgroundColor: theme.cardBg,
+                        padding: "2rem",
+                        borderRadius: "1rem",
+                        border: `1px solid ${theme.border}`,
+                      }}
+                    >
+                      <h2 style={{ marginBottom: "1rem" }}>
+                        {selectedPreviewLesson.title}
+                      </h2>
+                      <div
+                        style={{
+                          border: `1px solid ${theme.border}`,
+                          borderRadius: "0.5rem",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <iframe
+                          title="frontend-preview"
+                          className="w-full h-[400px] bg-white"
+                          srcDoc={`
+                            <html>
+                              <head><style>${selectedPreviewLesson.css_content || ""}</style></head>
+                              <body>
+                                ${selectedPreviewLesson.html_content || "<h1>Hello World</h1>"}
+                                <script>${selectedPreviewLesson.js_content || ""}</script>
+                              </body>
+                            </html>
+                          `}
+                          style={{
+                            width: "100%",
+                            height: "400px",
+                            border: "none",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div
+                        style={{
+                          width: "100%",
+                          aspectRatio: "16/9",
+                          backgroundColor: "#000",
+                          borderRadius: "1rem",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "white",
+                          fontSize: "1.25rem",
+                          marginBottom: "1.5rem",
+                          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
+                        }}
+                      >
+                        {selectedPreviewLesson.content_url ? (
+                          <video
+                            controls
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              borderRadius: "1rem",
+                            }}
+                          >
+                            <source
+                              src={selectedPreviewLesson.content_url}
+                              type="video/mp4"
+                            />
+                          </video>
+                        ) : (
+                          "[ Video Player Placeholder ]"
+                        )}
+                      </div>
+                      <h1
+                        style={{
+                          fontSize: "1.75rem",
+                          fontWeight: "800",
+                          color: theme.text,
+                        }}
+                      >
+                        {selectedPreviewLesson.title}
+                      </h1>
+                      <div
+                        style={{
+                          height: "1px",
+                          backgroundColor: theme.border,
+                          margin: "1.5rem 0",
+                        }}
+                      ></div>
+                      <p
+                        style={{
+                          color: theme.textSecondary,
+                          lineHeight: "1.6",
+                        }}
+                      >
+                        This is a preview of your lesson content. Students will
+                        see your video or reading material here.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: theme.textSecondary,
+                  }}
+                >
+                  <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>
+                    📖
+                  </div>
+                  <h3>
+                    Select a lesson from the curriculum to start previewing
+                  </h3>
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                width: "350px",
+                borderLeft: `1px solid ${theme.border}`,
+                backgroundColor: theme.cardBg,
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <div
+                style={{
+                  padding: "1.25rem",
+                  borderBottom: `1px solid ${theme.border}`,
+                }}
+              >
+                <h3 style={{ fontSize: "1rem", fontWeight: "700", margin: 0 }}>
+                  Course Curriculum
+                </h3>
+              </div>
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                {sections.map((section, sIdx) => (
+                  <div key={section.id}>
+                    <div
+                      style={{
+                        padding: "0.75rem 1.25rem",
+                        backgroundColor: darkMode ? "#111827" : "#f9fafb",
+                        borderBottom: `1px solid ${theme.border}`,
+                        fontSize: "0.875rem",
+                        fontWeight: "700",
+                      }}
+                    >
+                      Section {sIdx + 1}: {section.title}
+                    </div>
+                    {section.lessons?.map((lesson) => (
+                      <button
+                        key={lesson.id}
+                        onClick={() => setSelectedPreviewLesson(lesson)}
+                        style={{
+                          width: "100%",
+                          padding: "1rem 1.25rem",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                          backgroundColor:
+                            selectedPreviewLesson?.id === lesson.id
+                              ? darkMode
+                                ? "#374151"
+                                : "#eff6ff"
+                              : "transparent",
+                          border: "none",
+                          borderBottom: `1px solid ${theme.border}`,
+                          cursor: "pointer",
+                          textAlign: "left",
+                          color:
+                            selectedPreviewLesson?.id === lesson.id
+                              ? theme.accent
+                              : theme.text,
+                          transition: "background-color 0.2s",
+                        }}
+                      >
+                        <span style={{ fontSize: "1.1rem" }}>
+                          {lesson.type === "quiz"
+                            ? "📝"
+                            : lesson.type === "frontend"
+                              ? "💻"
+                              : "📄"}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "0.875rem",
+                            fontWeight:
+                              selectedPreviewLesson?.id === lesson.id
+                                ? "700"
+                                : "500",
+                          }}
+                        >
+                          {lesson.title}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Section Modal */}
+      {showEditSectionModal && sectionToEdit && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1100,
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: theme.cardBg,
+              padding: "2rem",
+              borderRadius: "1rem",
+              width: "100%",
+              maxWidth: "400px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1.5rem",
+              }}
+            >
+              <h2 style={{ fontSize: "1.5rem", fontWeight: "700", margin: 0 }}>
+                Edit Section
+              </h2>
+              <button
+                onClick={() => setShowEditSectionModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "1.5rem",
+                  color: theme.textSecondary,
+                  cursor: "pointer",
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <label
+              style={{
+                fontSize: "0.875rem",
+                fontWeight: "600",
+                color: theme.textSecondary,
+              }}
+            >
+              Section Title
+            </label>
+            <input
+              type="text"
+              value={sectionToEdit.title}
+              onChange={(e) =>
+                setSectionToEdit({ ...sectionToEdit, title: e.target.value })
+              }
+              style={inputStyle()}
+            />
+            <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
+              <button
+                type="button"
+                onClick={() => setShowEditSectionModal(false)}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  borderRadius: "0.5rem",
+                  border: `1px solid ${theme.border}`,
+                  background: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleUpdateSection}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  borderRadius: "0.5rem",
+                  border: "none",
+                  background: theme.accent,
+                  color: "white",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                }}
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Lesson Modal */}
+      {showEditLessonModal && lessonToEdit && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1100,
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: theme.cardBg,
+              padding: "2rem",
+              borderRadius: "1rem",
+              width: "100%",
+              maxWidth: "450px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1.5rem",
+              }}
+            >
+              <h2 style={{ fontSize: "1.5rem", fontWeight: "700", margin: 0 }}>
+                Edit Lesson
+              </h2>
+              <button
+                onClick={() => setShowEditLessonModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "1.5rem",
+                  color: theme.textSecondary,
+                  cursor: "pointer",
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  fontSize: "0.875rem",
+                  fontWeight: "600",
+                  color: theme.textSecondary,
+                }}
+              >
+                Lesson Title
+              </label>
+              <input
+                type="text"
+                value={lessonToEdit.title}
+                onChange={(e) =>
+                  setLessonToEdit({ ...lessonToEdit, title: e.target.value })
+                }
+                style={inputStyle()}
+              />
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  fontSize: "0.875rem",
+                  fontWeight: "600",
+                  color: theme.textSecondary,
+                }}
+              >
+                Content URL (for video lessons)
+              </label>
+              <input
+                type="text"
+                value={lessonToEdit.content_url || ""}
+                onChange={(e) =>
+                  setLessonToEdit({
+                    ...lessonToEdit,
+                    content_url: e.target.value,
+                  })
+                }
+                style={inputStyle()}
+                placeholder="https://example.com/video.mp4"
+              />
+            </div>
+            <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
+              <button
+                type="button"
+                onClick={() => setShowEditLessonModal(false)}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  borderRadius: "0.5rem",
+                  border: `1px solid ${theme.border}`,
+                  background: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleUpdateLesson}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  borderRadius: "0.5rem",
+                  border: "none",
+                  background: theme.accent,
+                  color: "white",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                }}
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Frontend Lab Modal */}
+      {showFrontendModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.8)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1200,
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: theme.cardBg,
+              borderRadius: "1rem",
+              width: "100%",
+              maxWidth: "1200px",
+              height: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+            }}
+          >
+            <div
+              style={{
+                padding: "1rem",
+                borderBottom: `1px solid ${theme.border}`,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <h2 style={{ fontSize: "1.25rem", fontWeight: "700", margin: 0 }}>
+                💻 Frontend Exercise Builder
+              </h2>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  onClick={() => setShowFrontendModal(false)}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    borderRadius: "0.5rem",
+                    border: `1px solid ${theme.border}`,
+                    background: "transparent",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveFrontendLab}
+                  style={{
+                    padding: "0.5rem 1.5rem",
+                    borderRadius: "0.5rem",
+                    border: "none",
+                    backgroundColor: theme.accent,
+                    color: "white",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  Save Coding Exercise
+                </button>
+              </div>
+            </div>
+
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                gap: "1rem",
+                padding: "1rem",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1rem",
+                }}
+              >
+                <div
+                  style={{ flex: 1, display: "flex", flexDirection: "column" }}
+                >
+                  <label
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: "700",
+                      color: theme.textSecondary,
+                      marginBottom: "0.25rem",
+                    }}
+                  >
+                    Starter HTML
+                  </label>
+                  <textarea
+                    style={{
+                      flex: 1,
+                      fontFamily: "monospace",
+                      fontSize: "0.875rem",
+                      padding: "0.75rem",
+                      borderRadius: "0.5rem",
+                      border: `1px solid ${theme.border}`,
+                      backgroundColor: darkMode ? "#000" : "#fff",
+                      color: theme.text,
+                      resize: "none",
+                    }}
+                    value={frontendData.html}
+                    onChange={(e) =>
+                      setFrontendData({ ...frontendData, html: e.target.value })
+                    }
+                  />
+                </div>
+                <div
+                  style={{ flex: 1, display: "flex", flexDirection: "column" }}
+                >
+                  <label
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: "700",
+                      color: theme.textSecondary,
+                      marginBottom: "0.25rem",
+                    }}
+                  >
+                    Starter CSS
+                  </label>
+                  <textarea
+                    style={{
+                      flex: 1,
+                      fontFamily: "monospace",
+                      fontSize: "0.875rem",
+                      padding: "0.75rem",
+                      borderRadius: "0.5rem",
+                      border: `1px solid ${theme.border}`,
+                      backgroundColor: darkMode ? "#000" : "#fff",
+                      color: theme.text,
+                      resize: "none",
+                    }}
+                    value={frontendData.css}
+                    onChange={(e) =>
+                      setFrontendData({ ...frontendData, css: e.target.value })
+                    }
+                  />
+                </div>
+                <div
+                  style={{ flex: 1, display: "flex", flexDirection: "column" }}
+                >
+                  <label
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: "700",
+                      color: theme.textSecondary,
+                      marginBottom: "0.25rem",
+                    }}
+                  >
+                    Starter JavaScript
+                  </label>
+                  <textarea
+                    style={{
+                      flex: 1,
+                      fontFamily: "monospace",
+                      fontSize: "0.875rem",
+                      padding: "0.75rem",
+                      borderRadius: "0.5rem",
+                      border: `1px solid ${theme.border}`,
+                      backgroundColor: darkMode ? "#000" : "#fff",
+                      color: theme.text,
+                      resize: "none",
+                    }}
+                    value={frontendData.js}
+                    onChange={(e) =>
+                      setFrontendData({ ...frontendData, js: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+              <div
+                style={{ flex: 1, display: "flex", flexDirection: "column" }}
+              >
+                <label
+                  style={{
+                    fontSize: "0.75rem",
+                    fontWeight: "700",
+                    color: theme.textSecondary,
+                    marginBottom: "0.25rem",
+                  }}
+                >
+                  Live Preview
+                </label>
+                <iframe
+                  title="frontend-preview"
+                  style={{
+                    flex: 1,
+                    width: "100%",
+                    backgroundColor: "#fff",
+                    borderRadius: "0.5rem",
+                    border: `2px dashed ${theme.border}`,
+                  }}
+                  srcDoc={`
+                    <html>
+                      <head><style>${frontendData.css}</style></head>
+                      <body>
+                        ${frontendData.html}
+                        <script>${frontendData.js}</script>
+                      </body>
+                    </html>
+                  `}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: theme.cardBg,
+              padding: "2rem",
+              borderRadius: "1rem",
+              width: "100%",
+              maxWidth: "450px",
+              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+            }}
+          >
+            <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+              <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>⚠️</div>
+              <h2
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: "700",
+                  margin: "0 0 0.5rem 0",
+                }}
+              >
+                Delete Course?
+              </h2>
+              <p style={{ color: theme.textSecondary, lineHeight: "1.5" }}>
+                Are you sure you want to delete{" "}
+                <strong>"{courseToDelete?.title}"</strong>? This action cannot
+                be undone and will remove all student progress.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", gap: "1rem" }}>
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  borderRadius: "0.5rem",
+                  border: `1px solid ${theme.border}`,
+                  backgroundColor: "transparent",
+                  color: theme.text,
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteCourse}
+                disabled={isSubmitting}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  borderRadius: "0.5rem",
+                  border: "none",
+                  backgroundColor: "#ef4444",
+                  color: "white",
+                  fontWeight: "600",
+                  cursor: isSubmitting ? "not-allowed" : "pointer",
+                  opacity: isSubmitting ? 0.7 : 1,
+                }}
+              >
+                {isSubmitting ? "Deleting..." : "Delete Course"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default MyCourses;

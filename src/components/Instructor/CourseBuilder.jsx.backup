@@ -1,0 +1,158 @@
+import React, { useState } from 'react';
+import { Plus, Edit, Trash2, Video, FileText, HelpCircle, Code, ChevronDown, ChevronUp, Loader2, X } from 'lucide-react';
+import {
+  useGetCourseStructureQuery,
+  useAddSectionMutation,
+  useUpdateSectionMutation,
+  useDeleteSectionMutation,
+  useAddLessonMutation,
+  useUpdateLessonMutation,
+  useDeleteLessonMutation,
+  useUpdateQuizMutation,
+} from '../../features/courses/coursesApi';
+
+const CourseBuilder = ({ courseId, darkMode }) => {
+  const { data: courseStructure, isLoading, error, refetch } = useGetCourseStructureQuery(courseId);
+  const [addSection, { isLoading: isAddingSection }] = useAddSectionMutation();
+  const [updateSection] = useUpdateSectionMutation();
+  const [deleteSection] = useDeleteSectionMutation();
+  const [addLesson] = useAddLessonMutation();
+  const [updateLesson] = useUpdateLessonMutation();
+  const [deleteLesson] = useDeleteLessonMutation();
+
+  const [openSections, setOpenSections] = useState({});
+  const [editingSection, setEditingSection] = useState(null);
+  const [editingLesson, setEditingLesson] = useState(null);
+
+  const toggleSection = (sectionId) => {
+    setOpenSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
+  };
+
+  const handleAddNewSection = async () => {
+    const title = prompt("Enter new section title:");
+    if (title) {
+      await addSection({ courseId, title }).unwrap();
+      refetch();
+    }
+  };
+
+  const handleEditSection = (section) => {
+    const newTitle = prompt("Enter new section title:", section.title);
+    if (newTitle && newTitle !== section.title) {
+      updateSection({ sectionId: section.id, title: newTitle });
+    }
+  };
+
+  const handleDeleteSection = async (sectionId) => {
+    if (window.confirm("Are you sure you want to delete this section and all its lessons?")) {
+      await deleteSection(sectionId).unwrap();
+      refetch();
+    }
+  };
+
+  const handleAddNewLesson = async (sectionId) => {
+    const title = prompt("Enter new lesson title:");
+    if (title) {
+      await addLesson({ sectionId, title, type: 'video' }).unwrap();
+      refetch();
+    }
+  };
+
+  const handleEditLesson = (lesson) => {
+    const newTitle = prompt("Enter new lesson title:", lesson.title);
+    if (newTitle && newTitle !== lesson.title) {
+      updateLesson({ lessonId: lesson.id, title: newTitle });
+    }
+  };
+
+  const handleDeleteLesson = async (lessonId) => {
+    if (window.confirm("Are you sure you want to delete this lesson?")) {
+      await deleteLesson(lessonId).unwrap();
+      refetch();
+    }
+  };
+
+  const getLessonIcon = (type) => {
+    switch (type) {
+      case 'video': return <Video size={16} />;
+      case 'text': return <FileText size={16} />;
+      case 'quiz': return <HelpCircle size={16} />;
+      case 'frontend': return <Code size={16} />;
+      default: return <FileText size={16} />;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-10">
+        <Loader2 className="animate-spin text-purple-500" size={32} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="p-10 text-center text-red-500">Error loading curriculum. Please try again.</div>;
+  }
+
+  return (
+    <div className="p-8 space-y-4">
+      <div className="flex justify-between items-center mb-4">
+        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          Organize your course content into sections and lessons.
+        </p>
+        <button
+          onClick={handleAddNewSection}
+          disabled={isAddingSection}
+          className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition disabled:opacity-50 flex items-center gap-2"
+        >
+          <Plus size={16} /> Add Section
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        {courseStructure?.sections?.map(section => (
+          <div key={section.id} className={`rounded-xl border ${darkMode ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'} overflow-hidden`}>
+            <div 
+              className={`flex justify-between items-center p-4 cursor-pointer transition ${darkMode ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}
+              onClick={() => toggleSection(section.id)}
+            >
+              <div className="flex items-center gap-3">
+                {openSections[section.id] ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                <h4 className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{section.title}</h4>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={(e) => { e.stopPropagation(); handleEditSection(section); }} className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-md"><Edit size={14} /></button>
+                <button onClick={(e) => { e.stopPropagation(); handleDeleteSection(section.id); }} className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-md"><Trash2 size={14} /></button>
+              </div>
+            </div>
+
+            {openSections[section.id] && (
+              <div className="border-t dark:border-gray-700 p-4 space-y-2">
+                {section.lessons?.map(lesson => (
+                  <div key={lesson.id} className={`flex items-center justify-between p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-purple-500">{getLessonIcon(lesson.type)}</span>
+                      <span className="text-sm font-medium">{lesson.title}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => handleEditLesson(lesson)} className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-md"><Edit size={14} /></button>
+                      <button onClick={() => handleDeleteLesson(lesson.id)} className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-md"><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                ))}
+                <button 
+                  onClick={() => handleAddNewLesson(section.id)}
+                  className="w-full mt-2 p-2 text-sm text-purple-600 font-semibold border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:bg-purple-500/10 hover:border-purple-500 transition"
+                >
+                  + Add Lesson
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default CourseBuilder;

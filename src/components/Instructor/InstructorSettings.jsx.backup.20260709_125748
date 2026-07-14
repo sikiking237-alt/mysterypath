@@ -1,0 +1,935 @@
+// src/components/Instructor/InstructorSettings.jsx
+import React, { useState, useEffect, useRef } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { 
+  User, Mail, Lock, Bell, Palette, Globe, CreditCard,
+  Award, BookOpen, Users, Calendar, Clock, Shield,
+  Smartphone, Camera, Save, Edit2, Check, X,
+  AlertCircle, Loader2, Upload, Trash2, Plus,
+  Moon, Sun, Monitor, Key, Fingerprint, LogOut,
+  DollarSign, Percent, TrendingUp, Star, Briefcase,
+  Globe2, MessageSquare, Zap, Settings as SettingsIcon
+} from 'lucide-react';
+import { updateUser, selectCurrentUser } from '../../features/auth/authSlice';
+
+const InstructorSettings = ({ darkMode, userImage, onUpdateImage }) => {
+  const dispatch = useDispatch();
+  const currentUser = useSelector(selectCurrentUser);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('profile');
+  const [notification, setNotification] = useState(null);
+  const fileInputRef = useRef(null);
+  const [previewAvatar, setPreviewAvatar] = useState(null);
+
+  // Profile Settings
+  const [formData, setFormData] = useState({
+    name: currentUser?.name || '',
+    email: currentUser?.email || '',
+    bio: '',
+    expertise: [],
+    website: '',
+    location: '',
+    title: '',
+    company: '',
+    experience: '',
+    education: '',
+    certifications: [],
+    socialLinks: {
+      twitter: '',
+      linkedin: '',
+      github: '',
+      youtube: '',
+      instagram: ''
+    }
+  });
+
+  // Preferences
+  const [preferences, setPreferences] = useState({
+    theme: 'system',
+    language: 'en',
+    timezone: 'UTC',
+    emailNotifications: true,
+    pushNotifications: true,
+    courseUpdates: true,
+    studentMessages: true,
+    marketingEmails: false
+  });
+
+  // Teaching Preferences
+  const [teaching, setTeaching] = useState({
+    expertise: [],
+    experience: '',
+    education: '',
+    certifications: [],
+    teachingStyle: 'structured',
+    languages: ['English'],
+    pricingModel: 'fixed',
+    defaultCurrency: 'USD'
+  });
+
+  // Security Settings
+  const [security, setSecurity] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+    twoFactorEnabled: false,
+    sessions: []
+  });
+
+  // Billing Settings
+  const [billing, setBilling] = useState({
+    paymentMethod: null,
+    payoutMethod: 'bank',
+    bankDetails: {
+      accountName: '',
+      accountNumber: '',
+      routingNumber: '',
+      bankName: ''
+    },
+    taxId: '',
+    businessName: ''
+  });
+
+  const tabs = [
+    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'preferences', label: 'Preferences', icon: SettingsIcon },
+    { id: 'teaching', label: 'Teaching', icon: BookOpen },
+    { id: 'security', label: 'Security', icon: Shield },
+    { id: 'billing', label: 'Billing', icon: CreditCard }
+  ];
+
+  const expertiseOptions = [
+    'Web Development', 'Mobile Development', 'Data Science',
+    'Machine Learning', 'Cloud Computing', 'DevOps',
+    'Design', 'Marketing', 'Business', 'Finance',
+    'Health & Fitness', 'Music', 'Photography', 'Writing',
+    'React', 'Python', 'JavaScript', 'Node.js', 'AI/ML'
+  ];
+
+  const languages = ['English', 'French', 'Spanish'];
+  const timezones = [
+    'UTC', 'America/New_York', 'America/Chicago', 'America/Denver',
+    'America/Los_Angeles', 'Europe/London', 'Europe/Paris',
+    'Asia/Tokyo', 'Asia/Dubai', 'Australia/Sydney'
+  ];
+
+  const teachingStyles = [
+    { value: 'structured', label: 'Structured (Lecture-based)' },
+    { value: 'interactive', label: 'Interactive (Hands-on)' },
+    { value: 'project', label: 'Project-based' },
+    { value: 'mixed', label: 'Mixed Approach' }
+  ];
+
+  const showNotification = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  useEffect(() => {
+    if (currentUser) {
+      setFormData(prev => ({
+        ...prev,
+        name: currentUser.name || '',
+        email: currentUser.email || ''
+      }));
+    }
+  }, [currentUser]);
+
+  const saveSettings = async () => {
+    setSaving(true);
+    try {
+      dispatch(updateUser({ 
+        name: formData.name,
+        email: formData.email
+      }));
+      showNotification('Settings saved successfully!');
+    } catch (error) {
+      showNotification('Error saving settings', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showNotification('Image must be less than 5MB', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => setPreviewAvatar(reader.result);
+    reader.readAsDataURL(file);
+
+    try {
+      if (onUpdateImage) {
+        onUpdateImage(reader.result);
+      }
+      showNotification('Avatar updated successfully!');
+    } catch (error) {
+      showNotification('Error uploading avatar', 'error');
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+  };
+
+  const handleSocialChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      socialLinks: {
+        ...formData.socialLinks,
+        [name]: value,
+      },
+    });
+  };
+
+  const handleExpertiseToggle = (skill) => {
+    if (formData.expertise.includes(skill)) {
+      setFormData({
+        ...formData,
+        expertise: formData.expertise.filter(s => s !== skill)
+      });
+    } else {
+      setFormData({
+        ...formData,
+        expertise: [...formData.expertise, skill]
+      });
+    }
+  };
+
+  const handleCertificationAdd = (e) => {
+    if (e.key === 'Enter' && e.target.value) {
+      setFormData({
+        ...formData,
+        certifications: [...formData.certifications, e.target.value]
+      });
+      e.target.value = '';
+    }
+  };
+
+  const handleCertificationRemove = (index) => {
+    setFormData({
+      ...formData,
+      certifications: formData.certifications.filter((_, i) => i !== index)
+    });
+  };
+
+  // Render Profile Tab
+  const renderProfileTab = () => (
+    <div className="space-y-6">
+      {/* Avatar Section */}
+      <div className="flex items-center gap-6 p-4 rounded-lg bg-gray-50 dark:bg-gray-700/30">
+        <div className="relative">
+          <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-indigo-500 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+            {previewAvatar || userImage ? (
+              <img
+                src={previewAvatar || userImage}
+                alt="Profile"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  const parent = e.target.parentElement;
+                  const initials = (formData.name || 'User')
+                    .split(' ')
+                    .map(w => w[0])
+                    .join('')
+                    .toUpperCase()
+                    .slice(0, 2);
+                  parent.innerHTML = `
+                    <div class="w-full h-full flex items-center justify-center text-white text-3xl font-bold">
+                      ${initials || '👤'}
+                    </div>
+                  `;
+                }}
+              />
+            ) : (
+              <span className="text-white text-3xl font-bold">
+                {(formData.name || 'User')
+                  .split(' ')
+                  .map(w => w[0])
+                  .join('')
+                  .toUpperCase()
+                  .slice(0, 2) || '👤'}
+              </span>
+            )}
+          </div>
+          <label className="absolute bottom-0 right-0 p-1.5 bg-indigo-600 rounded-full cursor-pointer hover:bg-indigo-700 transition shadow-lg">
+            <Camera className="w-4 h-4 text-white" />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarUpload}
+              className="hidden"
+            />
+          </label>
+        </div>
+        <div>
+          <h3 className="font-bold text-lg text-gray-900 dark:text-white">Profile Photo</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            JPG, PNG or GIF. Max 5MB.
+          </p>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="mt-2 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 font-medium"
+          >
+            Upload new photo
+          </button>
+        </div>
+      </div>
+
+      {/* Profile Form */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Full Name *
+          </label>
+          <input
+            type="text"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+            placeholder="Your full name"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Email Address *
+          </label>
+          <input
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+            placeholder="your@email.com"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Professional Title
+          </label>
+          <input
+            type="text"
+            name="title"
+            value={formData.title}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+            placeholder="e.g., Senior Developer & Instructor"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Company / Organization
+          </label>
+          <input
+            type="text"
+            name="company"
+            value={formData.company}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+            placeholder="Your company name"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Location
+          </label>
+          <input
+            type="text"
+            name="location"
+            value={formData.location}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+            placeholder="City, Country"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Website / Portfolio
+          </label>
+          <input
+            type="url"
+            name="website"
+            value={formData.website}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+            placeholder="https://yourwebsite.com"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Bio
+        </label>
+        <textarea
+          name="bio"
+          value={formData.bio}
+          onChange={handleChange}
+          rows="4"
+          className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+          placeholder="Tell your students about yourself..."
+        />
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          {formData.bio?.length || 0}/500 characters
+        </p>
+      </div>
+
+      {/* Expertise */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Areas of Expertise
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {expertiseOptions.map((skill) => (
+            <button
+              key={skill}
+              type="button"
+              onClick={() => handleExpertiseToggle(skill)}
+              className={`px-3 py-1.5 rounded-full text-sm transition ${
+                formData.expertise.includes(skill)
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+              }`}
+            >
+              {skill}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Certifications */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Certifications
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Add a certification"
+            className="flex-1 px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+            onKeyPress={handleCertificationAdd}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const input = document.querySelector('input[placeholder="Add a certification"]');
+              if (input && input.value) {
+                setFormData({
+                  ...formData,
+                  certifications: [...formData.certifications, input.value]
+                });
+                input.value = '';
+              }
+            }}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-2">
+          {formData.certifications.map((cert, index) => (
+            <span
+              key={index}
+              className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-sm flex items-center gap-1"
+            >
+              <Award className="w-3 h-3" />
+              {cert}
+              <button
+                type="button"
+                onClick={() => handleCertificationRemove(index)}
+                className="hover:text-red-500"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Social Links - Using Emojis */}
+      <div className="space-y-3">
+        <h4 className="font-medium text-gray-900 dark:text-white">Social Links</h4>
+        {[
+          { id: 'twitter', emoji: '🐦', label: 'Twitter' },
+          { id: 'linkedin', emoji: '💼', label: 'LinkedIn' },
+          { id: 'github', emoji: '🐙', label: 'GitHub' },
+          { id: 'youtube', emoji: '▶️', label: 'YouTube' },
+          { id: 'instagram', emoji: '📸', label: 'Instagram' }
+        ].map((social) => (
+          <div key={social.id} className="flex items-center gap-3">
+            <span className="text-xl w-8">{social.emoji}</span>
+            <span className="w-20 text-sm capitalize text-gray-700 dark:text-gray-300">
+              {social.label}
+            </span>
+            <input
+              type="url"
+              name={social.id}
+              value={formData.socialLinks[social.id] || ''}
+              onChange={handleSocialChange}
+              className="flex-1 px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+              placeholder={`https://${social.id}.com/yourprofile`}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // Render Preferences Tab
+  const renderPreferencesTab = () => (
+    <div className="space-y-6">
+      <div>
+        <h4 className="font-medium text-gray-900 dark:text-white mb-3">Theme</h4>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { value: 'light', icon: Sun, label: 'Light' },
+            { value: 'dark', icon: Moon, label: 'Dark' },
+            { value: 'system', icon: Monitor, label: 'System' }
+          ].map((theme) => (
+            <button
+              key={theme.value}
+              type="button"
+              onClick={() => setPreferences({ ...preferences, theme: theme.value })}
+              className={`p-4 rounded-lg border-2 text-center transition ${
+                preferences.theme === theme.value
+                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <theme.icon className="w-6 h-6 mx-auto mb-1 text-gray-700 dark:text-gray-300" />
+              <span className="text-sm text-gray-700 dark:text-gray-300">{theme.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Language Settings */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Language
+        </label>
+        <select
+          value={preferences.language}
+          onChange={(e) => setPreferences({ ...preferences, language: e.target.value })}
+          className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+        >
+          <option value="en">English</option>
+          <option value="fr">French</option>
+          <option value="es">Spanish</option>
+        </select>
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          Choose your preferred language for the platform interface
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Timezone
+        </label>
+        <select
+          value={preferences.timezone}
+          onChange={(e) => setPreferences({ ...preferences, timezone: e.target.value })}
+          className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+        >
+          {timezones.map((tz) => (
+            <option key={tz} value={tz}>{tz}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <h4 className="font-medium text-gray-900 dark:text-white mb-3">Notifications</h4>
+        <div className="space-y-3">
+          {[
+            { key: 'emailNotifications', label: 'Email Notifications' },
+            { key: 'pushNotifications', label: 'Push Notifications' },
+            { key: 'courseUpdates', label: 'Course Updates' },
+            { key: 'studentMessages', label: 'Student Messages' },
+            { key: 'marketingEmails', label: 'Marketing Emails' }
+          ].map((item) => (
+            <div key={item.key} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-700/30">
+              <span className="text-sm text-gray-700 dark:text-gray-300">{item.label}</span>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={preferences[item.key]}
+                  onChange={(e) => setPreferences({
+                    ...preferences,
+                    [item.key]: e.target.checked
+                  })}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render Teaching Tab
+  const renderTeachingTab = () => (
+    <div className="space-y-6">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Teaching Style
+        </label>
+        <select
+          value={teaching.teachingStyle}
+          onChange={(e) => setTeaching({ ...teaching, teachingStyle: e.target.value })}
+          className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+        >
+          {teachingStyles.map((style) => (
+            <option key={style.value} value={style.value}>{style.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Languages you teach in
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {['English', 'French', 'Spanish'].map((lang) => (
+            <button
+              key={lang}
+              type="button"
+              onClick={() => {
+                if (teaching.languages.includes(lang)) {
+                  setTeaching({
+                    ...teaching,
+                    languages: teaching.languages.filter(l => l !== lang)
+                  });
+                } else {
+                  setTeaching({
+                    ...teaching,
+                    languages: [...teaching.languages, lang]
+                  });
+                }
+              }}
+              className={`px-4 py-2 rounded-lg border-2 text-sm font-medium transition ${
+                teaching.languages.includes(lang)
+                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300'
+                  : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-gray-400'
+              }`}
+            >
+              {lang}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Years of Experience
+          </label>
+          <input
+            type="number"
+            value={teaching.experience}
+            onChange={(e) => setTeaching({ ...teaching, experience: e.target.value })}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+            placeholder="5"
+            min="0"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Education
+          </label>
+          <input
+            type="text"
+            value={teaching.education}
+            onChange={(e) => setTeaching({ ...teaching, education: e.target.value })}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+            placeholder="B.S. Computer Science, MIT"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Pricing Model
+        </label>
+        <select
+          value={teaching.pricingModel}
+          onChange={(e) => setTeaching({ ...teaching, pricingModel: e.target.value })}
+          className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+        >
+          <option value="fixed">Fixed Price</option>
+          <option value="subscription">Subscription</option>
+          <option value="tiered">Tiered Pricing</option>
+          <option value="free">Free</option>
+        </select>
+      </div>
+    </div>
+  );
+
+  // Render Security Tab
+  const renderSecurityTab = () => (
+    <div className="space-y-6">
+      <div>
+        <h4 className="font-medium text-gray-900 dark:text-white mb-3">Change Password</h4>
+        <div className="space-y-3">
+          <input
+            type="password"
+            value={security.currentPassword}
+            onChange={(e) => setSecurity({ ...security, currentPassword: e.target.value })}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+            placeholder="Current Password"
+          />
+          <input
+            type="password"
+            value={security.newPassword}
+            onChange={(e) => setSecurity({ ...security, newPassword: e.target.value })}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+            placeholder="New Password"
+          />
+          <input
+            type="password"
+            value={security.confirmPassword}
+            onChange={(e) => setSecurity({ ...security, confirmPassword: e.target.value })}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+            placeholder="Confirm New Password"
+          />
+          <button className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+            Update Password
+          </button>
+        </div>
+      </div>
+
+      <div className="p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="font-medium text-gray-900 dark:text-white">Two-Factor Authentication</h4>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Add an extra layer of security to your account
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSecurity({ ...security, twoFactorEnabled: !security.twoFactorEnabled })}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              security.twoFactorEnabled
+                ? 'bg-red-500 text-white hover:bg-red-600'
+                : 'bg-green-500 text-white hover:bg-green-600'
+            }`}
+          >
+            {security.twoFactorEnabled ? 'Disable 2FA' : 'Enable 2FA'}
+          </button>
+        </div>
+        {security.twoFactorEnabled && (
+          <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+            <p className="text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
+              <Check className="w-4 h-4" />
+              Two-factor authentication is enabled
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="p-4 rounded-lg border-2 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10">
+        <h4 className="font-bold text-red-600 dark:text-red-400">Danger Zone</h4>
+        <p className="text-sm text-red-500 dark:text-red-400 mt-1">
+          These actions are irreversible. Please proceed with caution.
+        </p>
+        <div className="flex gap-3 mt-3">
+          <button className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">
+            Delete Account
+          </button>
+          <button className="px-4 py-2 border-2 border-red-500 text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition">
+            Log Out All Sessions
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render Billing Tab
+  const renderBillingTab = () => (
+    <div className="space-y-6">
+      <div>
+        <h4 className="font-medium text-gray-900 dark:text-white mb-3">Payment Method</h4>
+        <div className="p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <CreditCard className="w-6 h-6 text-indigo-500" />
+            <div>
+              <p className="font-medium text-gray-900 dark:text-white">No payment method added</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Add a payment method to start monetizing your courses
+              </p>
+            </div>
+            <button className="ml-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+              Add Card
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h4 className="font-medium text-gray-900 dark:text-white mb-3">Payout Settings</h4>
+        <div className="space-y-3">
+          <select
+            value={billing.payoutMethod}
+            onChange={(e) => setBilling({ ...billing, payoutMethod: e.target.value })}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+          >
+            <option value="bank">Bank Transfer</option>
+            <option value="paypal">PayPal</option>
+            <option value="stripe">Stripe</option>
+          </select>
+
+          {billing.payoutMethod === 'bank' && (
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={billing.bankDetails.accountName}
+                onChange={(e) => setBilling({
+                  ...billing,
+                  bankDetails: { ...billing.bankDetails, accountName: e.target.value }
+                })}
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+                placeholder="Account Holder Name"
+              />
+              <input
+                type="text"
+                value={billing.bankDetails.accountNumber}
+                onChange={(e) => setBilling({
+                  ...billing,
+                  bankDetails: { ...billing.bankDetails, accountNumber: e.target.value }
+                })}
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+                placeholder="Account Number"
+              />
+              <input
+                type="text"
+                value={billing.bankDetails.routingNumber}
+                onChange={(e) => setBilling({
+                  ...billing,
+                  bankDetails: { ...billing.bankDetails, routingNumber: e.target.value }
+                })}
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+                placeholder="Routing Number"
+              />
+              <input
+                type="text"
+                value={billing.bankDetails.bankName}
+                onChange={(e) => setBilling({
+                  ...billing,
+                  bankDetails: { ...billing.bankDetails, bankName: e.target.value }
+                })}
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+                placeholder="Bank Name"
+              />
+            </div>
+          )}
+
+          <input
+            type="text"
+            value={billing.taxId}
+            onChange={(e) => setBilling({ ...billing, taxId: e.target.value })}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+            placeholder="Tax ID / EIN (Optional)"
+          />
+          <input
+            type="text"
+            value={billing.businessName}
+            onChange={(e) => setBilling({ ...billing, businessName: e.target.value })}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition"
+            placeholder="Business Name (Optional)"
+          />
+        </div>
+      </div>
+
+      <div>
+        <h4 className="font-medium text-gray-900 dark:text-white mb-3">Recent Payouts</h4>
+        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+          <DollarSign className="w-12 h-12 mx-auto mb-2 opacity-50" />
+          <p>No payouts yet</p>
+          <p className="text-sm">Start creating and selling courses to see earnings here</p>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Main Return
+  return (
+    <div className="max-w-6xl mx-auto p-6">
+      {/* Notification */}
+      {notification && (
+        <div className={`fixed top-24 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-2xl text-white text-sm font-medium flex items-center gap-2 shadow-2xl ${
+          notification.type === 'error' ? 'bg-red-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'
+        }`}>
+          {notification.type === 'error' ? <AlertCircle size={18} /> : <Check size={18} />}
+          {notification.message}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Instructor Settings
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400">
+            Manage your profile, preferences, and account settings
+          </p>
+        </div>
+        <button
+          onClick={saveSettings}
+          disabled={saving}
+          className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-indigo-500/25 transition-all disabled:opacity-50 flex items-center gap-2"
+        >
+          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+          Save Changes
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-2 mb-6 p-1 rounded-xl bg-gray-100 dark:bg-gray-800">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              activeTab === tab.id
+                ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
+        <div className="p-6">
+          {activeTab === 'profile' && renderProfileTab()}
+          {activeTab === 'preferences' && renderPreferencesTab()}
+          {activeTab === 'teaching' && renderTeachingTab()}
+          {activeTab === 'security' && renderSecurityTab()}
+          {activeTab === 'billing' && renderBillingTab()}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default InstructorSettings;

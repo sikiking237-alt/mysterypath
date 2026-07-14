@@ -1,0 +1,78 @@
+import { createSlice } from '@reduxjs/toolkit'
+
+const storedUser = (() => {
+  try {
+    const userJson = localStorage.getItem('user')
+    return userJson ? JSON.parse(userJson) : null
+  } catch (error) {
+    console.error('Failed to parse user from localStorage', error)
+    localStorage.removeItem('user')
+    return null
+  }
+})()
+
+const token = localStorage.getItem('token') || null
+const isAuthenticated = Boolean(token && storedUser)
+
+const initialState = {
+  user: storedUser,
+  token,
+  isAuthenticated,
+  isLoading: false,
+  error: null,
+}
+
+const authSlice = createSlice({
+  name: 'auth',
+  initialState,
+  reducers: {`n    clearError: (state) => {`n      state.error = null;`n    },
+    setCredentials: (state, action) => {
+      const { user, token } = action.payload
+      state.user = user
+      state.token = token
+      state.isAuthenticated = true
+      state.error = null
+      localStorage.setItem('token', token)
+      localStorage.setItem('user', JSON.stringify(user))
+    },
+    logout: (state) => {
+      state.user = null
+      state.token = null
+      state.isAuthenticated = false
+      state.error = null
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+    },
+    setLoading: (state, action) => {
+      state.isLoading = action.payload
+    },
+    setError: (state, action) => {
+      state.error = action.payload
+      state.isLoading = false
+    },
+    updateUser: (state, action) => {
+      state.user = { ...state.user, ...action.payload }
+      localStorage.setItem('user', JSON.stringify(state.user))
+    },
+  },
+})
+
+// Export actions
+export const {
+  setCredentials,
+  logout,
+  setLoading,
+  setError,
+  updateUser,
+} = authSlice.actions
+
+// Export selectors
+export const selectCurrentUser = (state) => state.auth.user
+export const selectIsLoggedIn = (state) => state.auth.isAuthenticated
+export const selectIsAuthenticated = selectIsLoggedIn
+export const selectAuthLoading = (state) => state.auth.isLoading
+export const selectAuthError = (state) => state.auth.error
+export const selectAuthToken = (state) => state.auth.token
+
+export default authSlice.reducer
+

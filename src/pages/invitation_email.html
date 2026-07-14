@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #6c5ce7, #a29bfe); padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .header h1 { color: white; margin: 0; font-size: 28px; }
+        .header p { color: rgba(255,255,255,0.9); margin: 5px 0 0; }
+        .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+        .role-badge { display: inline-block; padding: 8px 16px; background: #6c5ce7; color: white; border-radius: 20px; font-weight: bold; }
+        .btn { display: inline-block; padding: 12px 30px; background: #6c5ce7; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; }
+        .btn:hover { background: #5a4bd1; }
+        .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; text-align: center; font-size: 12px; color: #6c757d; }
+        .info { background: #e7f3ff; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .warning { font-size: 12px; color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎓 MysteryPath</h1>
+            <p>Your smooth path to knowledge mastery</p>
+        </div>
+        <div class="content">
+            <h2>You're Invited!</h2>
+            <p>Hello{% if name %} {{ name }}{% endif %},</p>
+            <p>You have been invited to join <strong>MysteryPath</strong> as a <span class="role-badge">{{ role_display }}</span>.</p>
+            <div class="info">
+                <p><strong>📋 What you'll get:</strong></p>
+                <ul>
+                    <li>Access to premium learning content</li>
+                    <li>Personalized learning paths</li>
+                    <li>Progress tracking and certificates</li>
+                    {% if role == 'instructor' %}
+                    <li>Instructor dashboard and course creation tools</li>
+                    {% elif role == 'moderator' %}
+                    <li>Content moderation and community management tools</li>
+                    {% else %}
+                    <li>Interactive quizzes and exercises</li>
+                    {% endif %}
+                </ul>
+            </div>
+            <p style="text-align: center;">
+                <a href="{{ invite_link }}" class="btn">🎯 Accept Invitation</a>
+            </p>
+            <p><strong>This link will expire in 7 days.</strong></p>
+            <p class="warning">⚠️ If you did not expect this invitation, please ignore this email.</p>
+            <div class="footer">
+                <p>© 2024 MysteryPath. All rights reserved.</p>
+                <p>This is an automated message, please do not reply to this email.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
