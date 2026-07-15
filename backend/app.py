@@ -3753,3 +3753,9 @@ app.register_blueprint(twitter_oauth_bp, url_prefix='/api/auth')
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)
 
+from .root_routes import register_root_routes
+register_root_routes(app)
+
+# ========== TEST ROUTES ==========
+from .test_route import register_test_routes
+register_test_routes(app)
