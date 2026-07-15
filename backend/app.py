@@ -3759,3 +3759,8 @@ register_root_routes(app)
 # ========== TEST ROUTES ==========
 from .test_route import register_test_routes
 register_test_routes(app)
+
+# ========== DIRECT TEST ROUTE ==========
+@app.route('/ping')
+def ping():
+    return {"status": "alive", "message": "Server is responding!"}
