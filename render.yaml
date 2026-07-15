@@ -1,12 +1,11 @@
 services:
   - type: web
-    name: mysterypath-api
+    name: mysterypath-backend
     runtime: python
+    repo: https://github.com/sikiking237-alt/mysterypath
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: cd backend && python run.py
+    startCommand: cd backend && gunicorn -w 1 -b 0.0.0.0:$PORT wsgi:app
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
       - key: SECRET_KEY
         generateValue: true
       - key: JWT_SECRET_KEY
@@ -17,4 +16,6 @@ services:
         value: production
       - key: FRONTEND_URL
         value: https://mysterypath-v2-git-main-sikiking237-6970s-projects.vercel.app
+      - key: PYTHON_VERSION
+        value: 3.11.0
     plan: free
