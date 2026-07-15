@@ -97,7 +97,7 @@ cors.init_app(
     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     max_age=3600)
 
-bcrypt.init_app(app)
+
 jwt.init_app(app)
 
 # ========== SOCKET.IO ==========
@@ -472,7 +472,7 @@ def init_db():
 
         for name, email, password, role in test_users:
             if not db.query(User).filter_by(email=email).first():
-                hashed = bcrypt.generate_password_hash(password).decode('utf-8')
+                hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                 new_user = User(
                     name=name, email=email, password=hashed, role=role, 
                     created_at=datetime.now(timezone.utc), is_active=True
@@ -721,7 +721,7 @@ def manage_users(current_user):
             if db.query(User).filter_by(email=email).first():
                 return jsonify({'error': 'User with this email already exists', 'success': False}), 409
 
-            hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             new_user = User(
                 name=name or email.split('@')[0],
                 email=email,
@@ -988,7 +988,7 @@ def admin_create_instructor(current_user):
         if db.query(User).filter_by(email=email).first():
             return jsonify({'error': 'User with this email already exists', 'success': False}), 409
 
-        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         new_user = User(
             name=name,
             email=email,
@@ -1236,7 +1236,7 @@ def admin_generate_invite(current_user):
             if name:
                 user.name = name
         else:
-            placeholder_password = bcrypt.generate_password_hash(str(uuid.uuid4())).decode('utf-8')
+            placeholder_password = bcrypt.hashpw(str(uuid.uuid4(.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'))).decode('utf-8')
             new_user = User(
                 name=name or 'Pending User',
                 email=email,

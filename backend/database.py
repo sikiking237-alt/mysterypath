@@ -1024,7 +1024,7 @@ def create_admin_user(session: Session, email: str, password: str, name: str = "
         print(f"Admin user with email {email} already exists.")
         return existing
     
-    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     admin = User(
         email=email,
         name=name,

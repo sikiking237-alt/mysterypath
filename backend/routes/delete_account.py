@@ -1,8 +1,8 @@
 ﻿# backend/routes/auth.py - Updated verification code endpoint with 5-minute expiry
 # Add this to your existing auth.py file
 
-from flask_bcrypt import Bcrypt
-bcrypt = Bcrypt()
+# 
+# 
 
 from ..utils import check_password, rehash_if_needed
 

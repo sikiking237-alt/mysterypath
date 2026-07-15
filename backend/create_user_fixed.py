@@ -19,7 +19,7 @@ def create_user():
         new_user = User(
             email='instructor@learnflow.com',
             name='Instructor User',
-            password=bcrypt.generate_password_hash('password123').decode('utf-8'),
+            password=bcrypt.hashpw('password123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
             role='instructor',
             is_active=True
         )

@@ -1,8 +1,8 @@
 ﻿# backend/routes/auth.py - Add change password endpoint
 # Add this to your existing auth.py file
 
-from flask_bcrypt import Bcrypt
-bcrypt = Bcrypt()
+# 
+# 
 
 from ..utils import check_password, rehash_if_needed
 
@@ -38,7 +38,7 @@ def change_password(current_user):
             return jsonify({'error': 'New password must be at least 8 characters long', 'success': False}), 400
         
         # Update password
-        user.password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        user.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         session.commit()
         
         return jsonify({

@@ -12,7 +12,7 @@ def create_test_user():
     # A minimal Flask app is needed to provide context for extensions like Bcrypt
     app = Flask(__name__)
     app.config.from_object(Config)
-    bcrypt.init_app(app)
+    
 
     # Run database operations within the app context
     with app.app_context():
@@ -24,7 +24,7 @@ def create_test_user():
                 is_correct = False
                 try:
                     # This will fail if user.password is not a valid hash (e.g., plaintext or from another library)
-                    is_correct = bcrypt.check_password_hash(user.password, 'password123')
+                    is_correct = bcrypt.checkpw('password123'.encode('utf-8'), user.password.encode('utf-8'))
                 except (ValueError, TypeError):
                     print("⚠️ Stored password for 'instructor@learnflow.com' is not a valid bcrypt hash.")
                     is_correct = False
@@ -34,7 +34,7 @@ def create_test_user():
                     return
                 else:
                     print("User exists but with an incorrect or malformed password. Updating password...")
-                    user.password = bcrypt.generate_password_hash('password123').decode('utf-8')
+                    user.password = bcrypt.hashpw('password123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                     session.commit()
                     print("✅ Password updated successfully!")
                     return
@@ -44,7 +44,7 @@ def create_test_user():
             new_user = User(
                 email='instructor@learnflow.com',
                 name='Instructor User',
-                password=bcrypt.generate_password_hash('password123').decode('utf-8'),
+                password=bcrypt.hashpw('password123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
                 role='instructor',
                 is_active=True,
                 xp=0,

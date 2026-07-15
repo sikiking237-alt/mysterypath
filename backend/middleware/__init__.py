@@ -1,10 +1,10 @@
 from flask import Flask
 from flask_cors import CORS
-from flask_bcrypt import Bcrypt
+
 from flask_socketio import SocketIO
 import os
 
-bcrypt = Bcrypt()
+
 socketio = SocketIO(cors_allowed_origins="*")
 
 def create_app(config_class=None):
@@ -25,7 +25,7 @@ def create_app(config_class=None):
         "http://localhost:5175"
     ])
     
-    bcrypt.init_app(app)
+    
     socketio.init_app(app, cors_allowed_origins="*")
     
     # Import and register blueprints

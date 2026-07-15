@@ -155,7 +155,7 @@ def check_password(stored_hash: str, password: str) -> bool:
         return False
     try:
         if stored_hash.startswith(('$2a$', '$2b$', '$2y$')):
-            return bcrypt.check_password_hash(stored_hash, password)
+            return bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8'))
         if stored_hash.startswith('scrypt:'):
             return werkzeug_check_password_hash(stored_hash, password)
     except Exception:
@@ -165,4 +165,4 @@ def check_password(stored_hash: str, password: str) -> bool:
 def rehash_if_needed(user, password: str) -> None:
     """Rehash password with bcrypt if it is using an old format."""
     if user and user.password and not user.password.startswith(('$2a$', '$2b$', '$2y$')):
-        user.password = bcrypt.generate_password_hash(password).decode('utf-8')
+        user.password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')

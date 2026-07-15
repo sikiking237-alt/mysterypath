@@ -49,7 +49,7 @@ def init_db():
         db = get_db()
         admin_email = 'sikiking237@gmail.com'
         if not db.query(User).filter_by(email=admin_email).first():
-            hashed_password = bcrypt.generate_password_hash('admin123').decode('utf-8')
+            hashed_password = bcrypt.hashpw('admin123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8').decode('utf-8')
             admin_user = User(
                 name='Siki King',
                 email=admin_email,

@@ -1,6 +1,6 @@
 ﻿from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
-from flask_bcrypt import Bcrypt
+# 
 from datetime import datetime, timedelta, timezone
 import re
 import os
@@ -16,7 +16,7 @@ except ImportError:
 from ..utils import check_password, rehash_if_needed
 
 auth_bp = Blueprint('auth', __name__)
-bcrypt = Bcrypt()
+# 
 
 def get_db():
     from ..database import get_db_session
@@ -49,7 +49,7 @@ def register():
         if existing_user:
             return jsonify({'error': 'User already exists'}), 400
         
-        hashed_password = bcrypt.generate_password_hash(data['password']).decode('utf-8')
+        hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         
         user = User(
             name=data['name'],
@@ -210,7 +210,7 @@ def reset_password():
         if not user.reset_code_expires or datetime.utcnow() > user.reset_code_expires:
             return jsonify({'error': 'Reset code has expired'}), 401
         
-        hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         user.password = hashed_password
         user.reset_code = None
         user.reset_code_expires = None
