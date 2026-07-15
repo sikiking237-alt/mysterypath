@@ -1236,7 +1236,7 @@ def admin_generate_invite(current_user):
             if name:
                 user.name = name
         else:
-            placeholder_password = bcrypt.hashpw(str(uuid.uuid4(.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'))).decode('utf-8')
+placeholder_password = bcrypt.hashpw(str(uuid.uuid4()).encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             new_user = User(
                 name=name or 'Pending User',
                 email=email,
