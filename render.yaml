@@ -4,7 +4,7 @@ services:
     runtime: python
     repo: https://github.com/sikiking237-alt/mysterypath
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: cd backend && gunicorn -w 1 -b 0.0.0.0:$PORT wsgi:app
+    startCommand: cd backend && gunicorn wsgi:app
     envVars:
       - key: SECRET_KEY
         generateValue: true
