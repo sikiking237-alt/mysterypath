@@ -4,7 +4,7 @@ services:
     runtime: python
     repo: https://github.com/sikiking237-alt/mysterypath
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: cd backend && gunicorn wsgi:app
+    startCommand: cd backend && python -c "from waitress import serve; from wsgi import app; serve(app, host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))"
     envVars:
       - key: SECRET_KEY
         generateValue: true
