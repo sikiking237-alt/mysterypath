@@ -26,11 +26,9 @@ def setup_two_factor(current_user):
         # Generate secret key
         secret = pyotp.random_base32()
         
-        # Store secret in user record (you may want to add a column for this)
-        # For now, we'll store it in the session or a separate table
-        # This is a simplified version - in production, use a proper 2FA table
+        user.two_factor_secret = secret
+        session.commit()
         
-        # Generate QR code
         totp = pyotp.TOTP(secret)
         provisioning_uri = totp.provisioning_uri(user.email, issuer_name="MysteryPath")
         
@@ -75,7 +73,13 @@ def verify_two_factor(current_user):
         if not secret or not code:
             return jsonify({'error': 'Secret and code are required', 'success': False}), 400
         
-        # Verify code
+        user = session.query(User).filter_by(id=current_user).first()
+        if not user or not user.two_factor_secret:
+            return jsonify({'error': '2FA not set up', 'success': False}), 400
+        
+        if secret != user.two_factor_secret:
+            return jsonify({'error': 'Invalid secret', 'success': False}), 400
+        
         totp = pyotp.TOTP(secret)
         is_valid = totp.verify(code)
         
@@ -109,8 +113,8 @@ def disable_two_factor(current_user):
         if not user:
             return jsonify({'error': 'User not found', 'success': False}), 404
         
-        # Remove 2FA secret (you'll need to implement this)
-        # For demo, we'll just return success
+        user.two_factor_secret = None
+        session.commit()
         
         return jsonify({
             'success': True,
@@ -134,9 +138,7 @@ def get_two_factor_status(current_user):
         if not user:
             return jsonify({'error': 'User not found', 'success': False}), 404
         
-        # Check if 2FA is enabled (you'll need to implement this)
-        # For demo, we'll return false
-        is_enabled = False
+        is_enabled = bool(user.two_factor_secret)
         
         return jsonify({
             'success': True,

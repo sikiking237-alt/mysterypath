@@ -160,6 +160,7 @@ class User(Base, TimestampMixin):
     is_online = Column(Boolean, default=False)
     google_id = Column(String(255), unique=True)
     github_id = Column(String(255), unique=True)
+    two_factor_secret = Column(String(255), nullable=True)
 
     # Relationships
     courses = relationship('Course', back_populates='instructor', cascade="all, delete-orphan")
