@@ -11,7 +11,6 @@ COPY backend/ backend/
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
-ENV PORT=10000
 
 # Run the application
 WORKDIR /app/backend
