@@ -89,11 +89,20 @@ logger.addHandler(file_handler)
 logger.addHandler(console_handler)
 
 # ========== CORS CONFIGURATION ==========
+cors_origins = app.config.get('CORS_ORIGINS', [])
+cors_origins = list(set(cors_origins + [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "https://mysterypath.netlify.app",
+    "https://*.netlify.app",
+]))
+
 cors.init_app(
     app,
-    origins=app.config.get('CORS_ORIGINS', []),
+    origins=cors_origins,
     supports_credentials=True,
-    allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With", "Origin"],
     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     max_age=3600)
 
@@ -102,7 +111,7 @@ jwt.init_app(app)
 
 # ========== SOCKET.IO ==========
 socketio.init_app(app, 
-    cors_allowed_origins=app.config.get('CORS_ORIGINS', []),
+    cors_allowed_origins=cors_origins,
     logger=True,
     engineio_logger=True,
     async_mode=async_mode,

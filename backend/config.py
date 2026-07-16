@@ -40,7 +40,7 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = 86400  # 24 hours
     
     # CORS
-    CORS_ORIGINS = json.loads(os.getenv('CORS_ORIGINS', '["http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "https://mysterypath.netlify.app"]'))
+    CORS_ORIGINS = json.loads(os.getenv('CORS_ORIGINS', '["http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "https://mysterypath.netlify.app", "https://*.netlify.app"]'))
     
     # File Upload
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'static/uploads/course_images')
