@@ -22,7 +22,8 @@ def create_app(config_class=None):
         frontend_url,
         "http://localhost:5173",
         "http://localhost:5174",
-        "http://localhost:5175"
+        "http://localhost:5175",
+        "https://mysterypath.netlify.app"
     ])
     
     
